@@ -1,0 +1,239 @@
+# IMPLEMENTATION_SPEC — daily-stock-summary
+
+> **Source of truth.** Read this first in any new, compacted, or joined session. Also read `CLAUDE.md` (ground rules).
+> **Maintenance rules:** when a phase completes, strike its heading through (`~~...~~`), tick its milestones, and set status to `DONE`. If work stops mid-phase, fill in that phase's **Progress Notes** (done / remaining / next step).
+
+## Status Dashboard
+
+| Phase | Scope | Status |
+|---|---|---|
+| ~~1~~ | ~~Backend foundation: Yahoo client + aggregation (TDD)~~ | DONE |
+| 2 | Backend API hardening: endpoint, validation, caching, resilience, integration tests | NOT STARTED |
+| 3 | Frontend foundation: scaffold, API client, toasts, symbol input, table + chart per symbol | NOT STARTED |
+| 4 | Frontend dashboard: multi-symbol, draggable/resizable panels, persistence, polish | NOT STARTED |
+| 5 | Fixes, testing, deployment, deliverables | NOT STARTED |
+
+Status values: `NOT STARTED` · `IN PROGRESS` · `DONE`
+
+## 1. Goal and Requirements (from Take-Home Assessment.pdf)
+
+Full-stack app that consumes the public Yahoo Finance chart API and displays intraday market data.
+
+**Backend** (.NET 10, self-hosted): endpoint takes a stock symbol, queries the last month of intraday data (15m interval), groups by day, returns JSON in exactly this shape and precision:
+
+```json
+[
+  { "day": "2009-01-30", "lowAverage": 40.2958, "highAverage": 49.7534, "volume": 49073348 }
+]
+```
+
+**Frontend** (React): enter a symbol and view results (table and/or chart); basic error handling for invalid symbols and failed requests.
+
+**Deliverables:** GitHub repo, `README.md` (setup/run), prompt log (see note below), description + reasoning of manual (non-AI) changes.
+**Expectations:** production quality, SOLID, maintainable, modern; MVP with requirements expected to grow.
+
+**Our extensions (user-requested):** multiple symbols at once; each has a chart view and a table view; dashboard panels rearranged by dragging a top bar; all notifications (invalid symbol, failed request, etc.) as corner toasts.
+
+> **Naming note:** the prompt log file is `PROMPT_LOG.md`, matching the assessment's deliverable name (renamed by the user from `PROMPTS_LOG.md`).
+
+## 2. Data Semantics (decisions to implement and test)
+
+Upstream: `GET https://query1.finance.yahoo.com/v8/finance/chart/{SYMBOL}?interval=15m&range=1mo` with header `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36`. (`range=1mo` keeps within Yahoo's 15m limit of ~60 days.) No API key is needed; do not add any.
+
+Response shape used: `chart.result[0].timestamp[]` (unix seconds), `chart.result[0].indicators.quote[0].{high[], low[], volume[]}`, `chart.result[0].meta.exchangeTimezoneName` / `gmtoffset`. Errors: `chart.error` (e.g. `{code:"Not Found"}`) with HTTP 404 for unknown symbols.
+
+| Field | Definition |
+|---|---|
+| `day` | `yyyy-MM-dd` of the bar's timestamp **in the exchange's timezone** (`exchangeTimezoneName`, fallback to `gmtoffset`), not UTC |
+| `lowAverage` | arithmetic mean of the `low` values of that day's 15m bars, rounded to **4 decimals** (`MidpointRounding.AwayFromZero`) |
+| `highAverage` | arithmetic mean of the `high` values of that day's bars, rounded to **4 decimals** |
+| `volume` | **sum** of that day's bar volumes, integer (`long`) |
+
+Rules (as implemented): the parser drops any bar whose `low` or `high` is `null` (Yahoo emits nulls for missing bars), including that bar's volume; a kept bar with `null` `volume` counts as 0; a day with no kept bars does not appear; a response with a missing or empty `timestamp` array yields `[]`; quote arrays whose length differs from `timestamp` are an upstream failure; output sorted by `day` **ascending** (oldest first; **decided by user**); JSON property names camelCase; numbers serialized as JSON numbers (not strings). Symbols are normalized to upper-case. The frontend presents the same data newest-first in the table (default sort `day` descending, most recent day at the top) and oldest-to-newest left-to-right on charts (most recent day at the right edge).
+
+## 3. Architecture
+
+### Repo layout (target)
+
+```
+/ (repo root)
+├─ CLAUDE.md, IMPLEMENTATION_SPEC.md, PROMPT_LOG.md, README.md
+├─ backend/
+│  ├─ DailyStockSummary.slnx                # + global.json, Directory.Build.props, Directory.Packages.props, .editorconfig
+│  ├─ src/DailyStockSummary.Api/            # Minimal API host, DI, middleware, config (empty stub until Phase 2)
+│  ├─ src/DailyStockSummary.Core/           # Domain models, interfaces, aggregation (no I/O)
+│  ├─ src/DailyStockSummary.Infrastructure/ # Yahoo client, caching decorator
+│  └─ tests/DailyStockSummary.Tests/        # xUnit (unit + integration)
+└─ frontend/                                # Vite + React + TypeScript
+```
+
+### Backend design (SOLID)
+
+- `IMarketDataProvider` (Core) — `Task<IntradaySeries> GetIntradayAsync(Symbol, ct)`; implemented by `YahooFinanceClient` (typed `HttpClient`). Swappable provider = open/closed.
+- `IDailySummaryCalculator` (Core) — pure function: `IntradaySeries -> IReadOnlyList<DailySummary>`. No I/O, fully unit-tested.
+- `IStockSummaryService` (Core) — orchestrates provider + calculator.
+- `CachingMarketDataProvider` (Infrastructure) — decorator over `IMarketDataProvider` using `IMemoryCache` (short TTL, configurable) to avoid hammering Yahoo.
+- `Symbol` value object — validates the trimmed ASCII input, then upper-cases: `^(?=.*[A-Za-z0-9])[A-Za-z0-9.\-^=]{1,15}$` (at least one letter/digit, so `.`/`..` cannot alter the upstream URL path; non-ASCII letters are rejected). **The frontend validation in Phase 3 must mirror this regex.** Note Yahoo's own spelling: Berkshire is `BRK-B` (`BRK.B` is "not found"), while `VOD.L`, `^GSPC`, `EURUSD=X`, `BTC-USD` work as typed.
+- Typed exceptions (`InvalidSymbolException`, `SymbolNotFoundException`, `UpstreamUnavailableException`) mapped to RFC 7807 `ProblemDetails` by a global exception handler (`IExceptionHandler`): 400 / 404 / 502 (or 504 on timeout) / 500.
+- Resilience: `Microsoft.Extensions.Http.Resilience` (retry w/ jitter, timeout, circuit breaker) on the Yahoo `HttpClient`.
+- Options pattern (`YahooOptions`: base URL, user agent, interval, range, timeout, cache TTL); CORS policy from config (allowed origins); `/health` endpoint; structured logging; OpenAPI doc.
+- Endpoint: **`GET /api/stocks/{symbol}/daily-summary`** → `200 DailySummary[]`.
+
+### Frontend design
+
+- Vite + React + TypeScript (strict). **TanStack Query** for server state (one query per symbol; caching, retries, error callbacks → toasts). Thin typed API client (`fetch`), base URL from `VITE_API_BASE_URL` (non-secret).
+- **Toasts:** `sonner` (or equivalent), anchored to a corner (bottom-right). Every user-facing error/notice goes through one `notify` helper — no inline error banners.
+- **Charts:** Recharts (high/low average as lines/area, volume as bars on a secondary axis). Accessible colors, light/dark friendly.
+- **Dashboard:** `react-grid-layout` (or `dnd-kit` if it fits better) — each symbol is a panel with a **drag-handle title bar**, resizable, with fluid reflow. Panel has a **Chart / Table toggle**, refresh, and remove actions. Layout and symbol list persisted to `localStorage` (guarded with try/catch).
+- Symbol input: add multiple symbols, normalize to upper-case, ignore duplicates, client-side format check mirroring the backend regex.
+- Table: sortable columns, **default sort newest day first (top)**, number formatting (prices to 4 dp, volume grouped), keyboard accessible.
+- States: loading skeletons, empty state, per-panel error state with retry.
+- Skill usage: backend uses `test-driven-development` (red → green → refactor). **Frontend does not use the TDD skill**; add focused component/hook tests with Vitest + React Testing Library after implementation.
+
+## 4. Environment Prerequisites
+
+- .NET SDK 10.0.401 installed and verified (`global.json` pins `10.0.401` with `rollForward: latestFeature`). In a freshly opened terminal `dotnet` may need a new session to appear on PATH.
+- Node.js 24.x present (v24.14.0 at spec creation).
+- `.gitignore` now covers `.env.local`, `bin/`, `obj/`, `node_modules/`, `dist/` (fixed by the user). IDE folders (`.vs/`, `.idea/`) and `coverage/` are optional additions.
+- Tooling quirk: a very large inline heredoc in the Bash tool can fail to parse; write scripts to a file (scratchpad) and run them instead.
+
+---
+
+## ~~Phase 1 — Backend Foundation (TDD)~~
+
+**Goal:** a tested core that turns Yahoo intraday data into the exact daily-summary JSON, independent of HTTP hosting concerns.
+**Status:** DONE (2026-10-04)
+
+Tasks
+1. Install/verify .NET 10 SDK; create solution + projects per layout (Api, Core, Infrastructure, Tests); central package management and `Directory.Build.props` (nullable on, warnings-as-errors, analyzers).
+2. **TDD** (use `test-driven-development` skill): `Symbol` value object (valid/invalid/normalization).
+3. **TDD:** `DailySummaryCalculator` — averages, 4-dp rounding, volume sum, timezone-correct day bucketing (incl. a bar near midnight UTC that belongs to a different exchange day), null-bar skipping, empty input, single bar, sort order.
+4. **TDD:** Yahoo response DTO parsing + mapping to `IntradaySeries` (fixture JSON files from real responses stored under `tests/.../Fixtures/`; no network in tests).
+5. **TDD:** `YahooFinanceClient` using a fake `HttpMessageHandler`: sends required `User-Agent`, correct URL/query, maps 404/`chart.error` → `SymbolNotFoundException`, non-2xx/timeout/malformed → `UpstreamUnavailableException`.
+6. `StockSummaryService` wiring provider + calculator (TDD with fake provider).
+
+Milestones (all must pass before Phase 2)
+- [x] `dotnet build` clean with zero warnings; `dotnet test` green (83 tests).
+- [x] Calculator tests prove exact output for a hand-computed fixture (values to 4 dp, volume as integer).
+- [x] Timezone bucketing test passes for a non-UTC exchange (Tokyo) and for DST-sensitive New York instants.
+- [x] Client tests cover success, unknown symbol, 5xx, timeout, caller cancellation, malformed JSON.
+- [x] One manual smoke check (throwaway console app in the scratchpad, not in the repo) against live Yahoo: `TSLA` and `^GSPC` returned 21 days, `lowAverage < highAverage` on every day; `BRK-B`, `VOD.L`, `EURUSD=X`, `BTC-USD` also work; `ZZZZZZZZ` → `SymbolNotFoundException`.
+
+**Progress Notes:**
+- Built per the approved plan: `Symbol`, `DailySummaryCalculator`, Yahoo DTOs + `YahooChartParser` (internal, tested via `InternalsVisibleTo`), `YahooFinanceClient`, `YahooOptions`, `StockSummaryService`; all test-first (red verified, then green).
+- Real-data fixture `tests/.../Fixtures/tsla-15m-two-days.json` (2 trading days sliced from a live response); expected daily values were computed independently in Node, not by the code under test.
+- Deviations from the original spec: solution file is `.slnx`; null-bar handling lives in the parser (calculator only sees complete bars); `Api` project is an empty stub (host is Phase 2); `Microsoft.Extensions.Http` / logging packages deferred to Phase 2 (not needed yet); `CA1707` (underscores in names) is disabled for `tests/` only via `tests/.editorconfig`.
+- Review pass (pr-review-toolkit code-reviewer, silent-failure-hunter, pr-test-analyzer) found and we fixed: dot-only symbols (`.`/`..`) altering the upstream URL, non-ASCII letters normalizing into valid symbols, `"result":[null]` crashing, any HTTP 404 being reported as "symbol not found". Added tests for those plus token forwarding, 5xx-with-valid-body, bad `gmtoffset`, out-of-range timestamps, longer-than-timestamps arrays, empty `timestamp`, DST bucketing, digit symbols, default options. A mutation check (6 mutations: token dropped, status check removed, DST ignored, length check loosened, digits removed from regex, empty-timestamp boundary) was caught by the suite each time.
+- Deliberate decision kept: a response with a missing/empty `timestamp` yields `[]` (a valid but illiquid symbol may legitimately have no bars) rather than a 502.
+- Carried forward (not done in Phase 1, see Phase 2/5 tasks): logging when the `gmtoffset` timezone fallback is used; Polly exception mapping; options validation; tzdata in Docker; sanity filters for garbage bars.
+
+---
+
+## Phase 2 — Backend API & Hardening
+
+**Goal:** a production-grade HTTP API exposing the service, runnable locally, covered by integration tests.
+**Status:** NOT STARTED
+
+Tasks
+1. Minimal API host: `GET /api/stocks/{symbol}/daily-summary`, `GET /health`, DI registrations, options binding + validation on start.
+2. Global `IExceptionHandler` → `ProblemDetails` (400/404/502/504/500) with stable `type`/`title` and a correlation/trace id; no stack traces or upstream bodies leaked.
+3. `CachingMarketDataProvider` decorator (configurable TTL; cache key = normalized symbol; do not cache failures).
+4. Resilience pipeline on the Yahoo `HttpClient` (retry w/ jitter on transient errors, timeout, circuit breaker).
+5. CORS (config-driven origins; default `http://localhost:5173`), rate limiting (per-IP fixed window), response compression, OpenAPI (+ viewer in Development only), structured logging.
+6. **TDD** with `WebApplicationFactory`: integration tests replacing `IMarketDataProvider` with a fake.
+7. **Carried over from the Phase 1 review:**
+   - Register the Yahoo client with `AddHttpClient` (needs `Microsoft.Extensions.Http`), set a sane `MaxResponseContentBufferSize` (a few MB; default is 2 GB) and validate `YahooOptions` on start (base URL ends with `/`, non-empty interval/range, valid user agent: `ParseAdd` throws `FormatException` on a bad one).
+   - Resilience handlers surface Polly exceptions (e.g. `TimeoutRejectedException`, `BrokenCircuitException`) instead of `HttpRequestException`/`TaskCanceledException`; verify actual behavior and map them in the client (timeout → a distinguishable timeout failure so the handler can return 504; open circuit → 502/503). Today `UpstreamUnavailableException` cannot distinguish timeout from other failures.
+   - Add structured logging (inject `ILogger`): warn when the `gmtoffset` timezone fallback is used, when bars are dropped, and for every upstream failure (the exception handler logs details but returns only fixed titles; never echo `ex.Message` of `UpstreamUnavailableException` or upstream bodies in `ProblemDetails`).
+   - The exception handler must treat `OperationCanceledException` with `HttpContext.RequestAborted` set as a quiet client abort, not a 500, and `Symbol.Parse` must run inside the request pipeline so `InvalidSymbolException` → 400.
+   - Consider sanity filters in the parser for garbage bars (`low > high`, non-positive prices, negative volume, duplicate timestamps); decide behavior and test it.
+
+Milestones
+- [ ] `dotnet run` serves the API; `curl http://localhost:<port>/api/stocks/TSLA/daily-summary` returns the exact JSON shape (camelCase, 4-dp numbers, integer volume) from live data.
+- [ ] `/api/stocks/!!!/daily-summary` → 400 ProblemDetails; unknown symbol (e.g. `ZZZZZZZZ`) → 404 ProblemDetails; simulated upstream failure → 502; no stack traces in any body.
+- [ ] Second request for the same symbol within TTL does not call upstream (test asserts provider call count).
+- [ ] CORS preflight from the Vite origin succeeds; disallowed origin is rejected.
+- [ ] Integration test suite green; `dotnet build` zero warnings.
+- [ ] `/health` returns 200; OpenAPI document served in Development.
+
+**Progress Notes:** _(none yet)_
+
+---
+
+## Phase 3 — Frontend Foundation
+
+**Goal:** a working single-symbol experience wired to the real backend, with toast-based error handling.
+**Status:** NOT STARTED
+
+Tasks
+1. Scaffold Vite + React + TS (strict) in `frontend/`; ESLint (typescript-eslint, react-hooks), Prettier; `VITE_API_BASE_URL` in `.env.example` (no secrets); dev proxy or CORS to the backend.
+2. Typed API client + `DailySummary` types; TanStack Query provider; error normalization (ProblemDetails → user-friendly message).
+3. Toast system in a corner (`sonner`), single `notify` helper (success/info/error), used for invalid symbol, 404, network failure, 5xx, rate-limit.
+4. Symbol input form (validation, upper-casing, Enter to submit, disabled while pending).
+5. Table view and chart view for one symbol (components reusable by Phase 4 panels).
+6. Loading skeleton, empty state, error state with retry.
+
+Milestones
+- [ ] `npm run lint` and `npm run build` pass with zero errors/warnings.
+- [ ] Entering `TSLA` shows a table and a chart matching the backend JSON (spot-check 2+ days against `curl`).
+- [ ] Invalid symbol (`!!!`) → client-side toast, no request sent; unknown symbol (`ZZZZZZZZ`) → 404 toast; backend stopped → network-failure toast. Toasts appear in a corner and auto-dismiss.
+- [ ] Table defaults to newest day at the top and columns sort; chart x-axis runs oldest → newest (latest day at the right); numbers formatted (4 dp prices, grouped volume).
+- [ ] Basic Vitest tests for API client error mapping and symbol validation pass.
+
+**Progress Notes:** _(none yet)_
+
+---
+
+## Phase 4 — Frontend Dashboard (multi-symbol, draggable)
+
+**Goal:** the dashboard experience: many symbols, each with chart + table views, freely rearrangeable.
+**Status:** NOT STARTED
+
+Tasks
+1. Dashboard state (symbols + layout) via a reducer/store; persisted to `localStorage` with safe fallback.
+2. Panel component per symbol: **drag-handle top bar** (symbol title), Chart/Table toggle, refresh, remove, resize handle.
+3. Grid layout with fluid drag-to-rearrange and responsive breakpoints; new panels placed in the first free slot.
+4. Duplicate-symbol handling (toast + focus/scroll to the existing panel); per-panel loading/error isolation (one failing symbol never affects others).
+5. Visual polish via the `frontend-design` skill: typography, color tokens, light/dark, keyboard + screen-reader accessibility (drag handle keyboard operable, aria-labels, focus management).
+6. Charts: shared tooltip styling, readable axes at small panel sizes, volume on secondary axis.
+
+Milestones
+- [ ] Add 3+ symbols (e.g. `TSLA`, `AAPL`, `MSFT`); each panel independently toggles Chart ↔ Table.
+- [ ] Dragging a panel by its top bar rearranges the grid smoothly; resize works; layout survives page refresh.
+- [ ] One invalid/failed symbol shows a toast and an error state in its panel only; others unaffected; retry works.
+- [ ] Usable at phone width (no horizontal page scroll) and desktop; lighthouse/axe accessibility check has no critical issues.
+- [ ] `npm run lint` + `npm run build` clean; component tests for panel actions and layout persistence pass.
+
+**Progress Notes:** _(none yet)_
+
+---
+
+## Phase 5 — Fixes, Testing, Deployment
+
+**Goal:** release-quality repo a reviewer can clone, run, and trust.
+**Status:** NOT STARTED
+
+Tasks
+1. Full bug sweep from manual end-to-end testing; run `pr-review-toolkit` review passes and `/code-review`; fix findings.
+2. Test hardening: backend coverage review (edge cases: holidays/weekends, symbols with `.`/`^`/`=`, thin-volume days, Yahoo schema drift); frontend tests for critical paths; an end-to-end smoke (Playwright, optional) for add symbol → toggle view → drag.
+3. Security pass: no secrets in repo or logs, dependency audit (`dotnet list package --vulnerable`, `npm audit`), input validation review, security headers, CORS locked to configured origins.
+4. Deployment: multi-stage Dockerfiles (ensure the runtime image has tzdata/ICU so IANA exchange timezones resolve; otherwise bucketing silently falls back to a fixed offset, so add a startup check; API: `dotnet publish` on the ASP.NET 10 runtime image, non-root; frontend: static build served by nginx), `docker-compose.yml` running both, config via environment variables, CI workflow (GitHub Actions: backend build+test, frontend lint+build+test).
+5. Deliverables: `README.md` (prereqs, run backend, run frontend, run tests, Docker, API reference, design decisions, future work); finalize `PROMPT_LOG.md`; document manual (non-AI) changes and reasoning (user-authored section).
+6. `.gitignore` finalized (`.env.local`, `bin/`, `obj/`, `node_modules/`, `dist/`, IDE files).
+
+Milestones
+- [ ] Fresh clone → follow README only → backend and frontend run locally and the full flow works.
+- [ ] `docker compose up` brings up both services; the UI works against the containerized API.
+- [ ] CI green (backend tests, frontend lint/build/tests).
+- [ ] `dotnet list package --vulnerable` and `npm audit` show no high/critical issues (or documented exceptions).
+- [ ] Prompt log complete; manual-changes write-up present; spec statuses all `DONE`.
+
+**Progress Notes:** _(none yet)_
+
+---
+
+## Change Log (spec)
+
+- 2026-10-04 — Spec created. No code written yet. Open prerequisite: install .NET 10 SDK.
+- 2026-10-04 — Ascending day order decided by user (table shows newest first on the frontend).
+- 2026-10-04 — Phase 1 complete (83 tests, zero warnings, live smoke check passed). Symbol regex tightened; Phase 2 gained carried-over review items; Phase 5 gained a tzdata check.
