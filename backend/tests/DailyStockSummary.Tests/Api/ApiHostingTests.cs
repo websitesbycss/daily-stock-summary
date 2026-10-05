@@ -164,28 +164,11 @@ public class ApiHostingTests
     [MemberData(nameof(BadConfiguration))]
     public void Bad_configuration_stops_the_host_at_startup_and_names_the_setting(string key, string value, string expectedInMessage)
     {
-        // Every attempt must fail to start. Very occasionally (seen once on a loaded CI runner) the test host surfaces an
-        // ObjectDisposedException from tearing the failed host down instead of the validation error that caused it, so a
-        // few fresh attempts are checked for the one that names the setting.
-        const int attempts = 3;
-        var reports = new List<string>();
+        using var app = App(ApiTestApp.With((key, value)));
 
-        for (var attempt = 1; attempt <= attempts; attempt++)
-        {
-            using var app = App(ApiTestApp.With((key, value)));
+        var failure = Assert.ThrowsAny<Exception>(() => app.CreateClient());
 
-            var failure = Assert.ThrowsAny<Exception>(() => app.CreateClient());
-            var report = Flatten(failure);
-
-            if (report.Contains(expectedInMessage, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            reports.Add(report);
-        }
-
-        Assert.Fail($"Startup failed {attempts} times but never named '{expectedInMessage}'. Errors seen: {string.Join(" || ", reports)}");
+        Assert.Contains(expectedInMessage, Flatten(failure), StringComparison.Ordinal);
     }
 
     private static string Flatten(Exception exception)

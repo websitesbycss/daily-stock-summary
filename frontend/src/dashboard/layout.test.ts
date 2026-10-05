@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { breakpointForWidth, firstFreeSlot, moveInReadingOrder, readingOrder } from './layout'
-import type { GridItem } from './types'
+import {
+  breakpointForWidth,
+  firstFreeSlot,
+  HYSTERESIS,
+  moveInReadingOrder,
+  readingOrder,
+} from './layout'
+import type { Breakpoint, GridItem } from './types'
 
 const item = (i: string, x: number, y: number, w = 6, h = 13): GridItem => ({ i, x, y, w, h })
 
@@ -81,5 +87,43 @@ describe('breakpointForWidth', () => {
 
   it('falls back to the smallest layout before the container has been measured', () => {
     expect(breakpointForWidth(0)).toBe('sm')
+  })
+})
+
+describe('breakpointForWidth while a layout is already shown', () => {
+  it.each([
+    // [width, layout currently shown, layout to use]
+    [1490, 'xl', 'xl'], // 10 px under the 1500 edge: not far enough to leave xl
+    [1477, 'xl', 'xl'],
+    [1476, 'xl', 'lg'], // 24 px under: now it changes
+    [1480, 'lg', 'lg'],
+    [1524, 'lg', 'lg'], // 24 px over the edge: still lg
+    [1525, 'lg', 'xl'],
+    [880, 'lg', 'lg'],
+    [876, 'lg', 'md'],
+    [924, 'md', 'md'],
+    [925, 'md', 'lg'],
+    [624, 'sm', 'sm'],
+    [625, 'sm', 'md'],
+    [5000, 'xl', 'xl'],
+    [500, 'xl', 'sm'], // a real jump (window snapped to a phone width) is not held back
+    [1900, 'sm', 'xl'],
+  ])('at %i px, showing %s, uses %s', (width, shown, expected) => {
+    expect(breakpointForWidth(width, shown as Breakpoint)).toBe(expected)
+  })
+
+  it('is wider than a classic scrollbar, so a scrollbar appearing cannot flip the layout', () => {
+    expect(HYSTERESIS).toBeGreaterThan(17)
+    // The same window measures 1504 px without a vertical scrollbar and 1489 px with one.
+    for (const shown of ['xl', 'lg'] as const) {
+      expect([1504, 1489, 1504, 1489].map((width) => breakpointForWidth(width, shown))).toEqual(
+        Array(4).fill(shown),
+      )
+    }
+  })
+
+  it('behaves as before when nothing is shown yet', () => {
+    expect(breakpointForWidth(1501)).toBe('xl')
+    expect(breakpointForWidth(1500)).toBe('lg')
   })
 })

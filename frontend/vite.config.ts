@@ -11,5 +11,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
+    // The dashboard tests type into a real form many times and load the chart lazily. They take about a second
+    // normally, but a busy or slow machine (a cold CI runner, Docker starting up) can push them past the 5 s default.
+    testTimeout: 20_000,
   },
 })

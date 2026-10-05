@@ -494,6 +494,35 @@ describe('what the dashboard gives the grid', () => {
     expect(slot(layouts.sm, 'TSLA')).toMatchObject({ minW: 1, minH: 9 }) // one column on a phone
   })
 
+  it('does not change layout when the width moves a little across a breakpoint edge', async () => {
+    // A scrollbar appearing or disappearing moves the width by about 15 px; that must not flip the layout.
+    grid.width = 1510
+    stubApi()
+    const user = userEvent.setup()
+    renderApp()
+    await addSymbol(user, 'TSLA')
+    expect(grid.props!.breakpoint).toBe('xl')
+
+    grid.width = 1495
+    await user.click(within(panel('TSLA')).getByRole('button', { name: 'Table' }))
+    expect(grid.props!.breakpoint).toBe('xl')
+
+    grid.width = 1510
+    await user.click(within(panel('TSLA')).getByRole('button', { name: 'Chart' }))
+    expect(grid.props!.breakpoint).toBe('xl')
+
+    grid.width = 1450 // a real change
+    await user.click(within(panel('TSLA')).getByRole('button', { name: 'Table' }))
+    expect(grid.props!.breakpoint).toBe('lg')
+
+    grid.width = 1510 // and back up only past the dead band
+    await user.click(within(panel('TSLA')).getByRole('button', { name: 'Chart' }))
+    expect(grid.props!.breakpoint).toBe('lg')
+    grid.width = 1530
+    await user.click(within(panel('TSLA')).getByRole('button', { name: 'Table' }))
+    expect(grid.props!.breakpoint).toBe('xl')
+  })
+
   it('lets the title bar drag a panel but not its buttons', async () => {
     stubApi()
     const user = userEvent.setup()

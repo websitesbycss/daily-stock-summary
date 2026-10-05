@@ -1,4 +1,4 @@
-import { useMemo, type Dispatch } from 'react'
+import { useMemo, useState, type Dispatch } from 'react'
 import { Responsive, useContainerWidth } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import type { DashboardAction } from '../dashboard/dashboardReducer'
@@ -10,7 +10,7 @@ import {
   MIN_SIZE,
   readingOrder,
 } from '../dashboard/layout'
-import type { DashboardState, GridItem, Layouts } from '../dashboard/types'
+import type { Breakpoint, DashboardState, GridItem, Layouts } from '../dashboard/types'
 import { Panel } from './Panel'
 
 interface Props {
@@ -42,8 +42,12 @@ export function Dashboard({ state, dispatch, onRemoved, announce }: Props) {
   const { width, containerRef, mounted } = useContainerWidth()
   // Derived from the width and handed to the grid, so the grid, the move buttons and the saved
   // layout always refer to the same breakpoint (the grid's own change events do not fire for the
-  // first layout, and a resize can make its report cover several breakpoints at once).
-  const breakpoint = breakpointForWidth(width)
+  // first layout, and a resize can make its report cover several breakpoints at once). The layout
+  // currently shown is kept while the width stays near its edges, so the grid cannot flip back and
+  // forth when something small (a scrollbar, a rounding step) moves the width across a threshold.
+  const [shown, setShown] = useState<Breakpoint>(() => breakpointForWidth(width))
+  const breakpoint = breakpointForWidth(width, shown)
+  if (breakpoint !== shown) setShown(breakpoint)
   const gridLayouts = useMemo(() => withLimits(state.layouts), [state.layouts])
   const order = readingOrder(state.layouts[breakpoint] ?? [])
 

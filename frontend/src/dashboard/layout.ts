@@ -18,8 +18,8 @@ export const BREAKPOINTS: Breakpoint[] = ['xl', 'lg', 'md', 'sm']
 /** Smallest a panel can be resized to: its top bar plus a readable chart. */
 export const MIN_SIZE = { w: 3, h: 9 }
 
-/** Same rule the grid uses: the widest breakpoint whose threshold the container width exceeds. */
-export function breakpointForWidth(width: number): Breakpoint {
+/** The widest breakpoint whose threshold the container width exceeds (the grid's own rule). */
+function widthToBreakpoint(width: number): Breakpoint {
   let match: Breakpoint = 'sm'
   let widest = -1
   for (const breakpoint of BREAKPOINTS) {
@@ -30,6 +30,28 @@ export function breakpointForWidth(width: number): Breakpoint {
     }
   }
   return match
+}
+
+/**
+ * How far past a threshold the width must move before the layout changes back. It is wider than a classic
+ * scrollbar (about 17 px), so a scrollbar appearing or disappearing, or a pixel of rounding at a browser zoom
+ * level, can never flip the layout and start a width / height / scrollbar feedback loop.
+ */
+export const HYSTERESIS = 24
+
+/**
+ * The layout to use at a container width. Pass the layout currently shown to keep it while the width stays within
+ * HYSTERESIS pixels of its edges; without it the plain thresholds apply.
+ */
+export function breakpointForWidth(width: number, previous?: Breakpoint): Breakpoint {
+  const plain = widthToBreakpoint(width)
+  if (!previous || plain === previous) return plain
+
+  const index = BREAKPOINTS.indexOf(previous)
+  const lowerEdge = BREAKPOINT_WIDTHS[previous]
+  const upperEdge = index > 0 ? BREAKPOINT_WIDTHS[BREAKPOINTS[index - 1]] : Infinity
+  const stillInside = width > lowerEdge - HYSTERESIS && width <= upperEdge + HYSTERESIS
+  return stillInside ? previous : plain
 }
 
 export const MAX_PANELS = 12

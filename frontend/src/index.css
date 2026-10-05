@@ -66,6 +66,12 @@
   --bars: #2b3544;
 }
 
+/* Always reserve the scrollbar's space. Otherwise the page width changes whenever the grid grows past the window
+   height, the grid may then pick another layout, which changes its height again, and the panels shake. */
+html {
+  scrollbar-gutter: stable;
+}
+
 *,
 *::before,
 *::after {
