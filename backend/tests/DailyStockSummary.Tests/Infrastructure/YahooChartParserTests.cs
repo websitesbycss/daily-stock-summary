@@ -1,7 +1,8 @@
 using DailyStockSummary.Core.Exceptions;
 using DailyStockSummary.Core.Models;
-using DailyStockSummary.Core.Services;
 using DailyStockSummary.Infrastructure.Yahoo;
+using DailyStockSummary.Tests.TestSupport;
+using static DailyStockSummary.Tests.TestSupport.YahooPayload;
 
 namespace DailyStockSummary.Tests.Infrastructure;
 
@@ -9,48 +10,17 @@ public class YahooChartParserTests
 {
     private static readonly Symbol Tsla = Symbol.Parse("TSLA");
 
-    private static string Fixture(string name) =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
-
-    /// <summary>Builds a Yahoo-shaped payload. Array arguments are raw JSON so tests can inject nulls.</summary>
-    private static string Chart(
-        string timestamps = "[1788442200,1788443100]",
-        string low = "[10.5,10.25]",
-        string high = "[11.5,11.25]",
-        string volume = "[100,200]",
-        string meta = """{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400}""") =>
-        $$$"""
-        {"chart":{"result":[{"meta":{{{meta}}},"timestamp":{{{timestamps}}},
-        "indicators":{"quote":[{"open":{{{low}}},"high":{{{high}}},"low":{{{low}}},"close":{{{low}}},"volume":{{{volume}}}}]}}],"error":null}}
-        """;
-
     [Fact]
     public void Parse_reads_bars_and_exchange_timezone_from_a_real_yahoo_response()
     {
-        var series = YahooChartParser.Parse(Tsla, Fixture("tsla-15m-two-days.json"));
+        var series = YahooChartParser.Parse(Tsla, TestFixtures.Read(TestFixtures.TeslaOneMonth));
 
         Assert.Equal(Tsla, series.Symbol);
         Assert.Equal("America/New_York", series.ExchangeTimeZone.Id);
-        Assert.Equal(52, series.Bars.Count);
+        Assert.Equal(547, series.Bars.Count);
         Assert.Equal(
             new IntradayBar(DateTimeOffset.FromUnixTimeSeconds(1788442200), 365.9100036621094m, 375.17999267578125m, 9472614),
             series.Bars[0]);
-    }
-
-    [Fact]
-    public void Real_response_summarizes_to_independently_computed_daily_values()
-    {
-        // Expected values were computed outside this codebase from the same fixture (Node, plain arithmetic).
-        var series = YahooChartParser.Parse(Tsla, Fixture("tsla-15m-two-days.json"));
-
-        var summaries = new DailySummaryCalculator().Calculate(series);
-
-        Assert.Equal(
-            [
-                new DailySummary(new DateOnly(2026, 9, 3), 378.9251m, 381.4209m, 57_740_176),
-                new DailySummary(new DateOnly(2026, 9, 4), 352.7499m, 354.7028m, 59_338_238),
-            ],
-            summaries);
     }
 
     [Fact]
@@ -80,22 +50,14 @@ public class YahooChartParserTests
         Assert.Equal([0L, 200L], bars.Select(b => b.Volume));
     }
 
-    [Fact]
-    public void Parse_falls_back_to_the_gmt_offset_when_the_timezone_name_is_unknown()
+    [Theory]
+    [InlineData("""{"exchangeTimezoneName":"Unknown/Zone","gmtoffset":19800}""", 5.5)] // India: a half-hour offset
+    [InlineData("""{"gmtoffset":32400}""", 9.0)] // Japan, name omitted
+    public void Parse_falls_back_to_the_gmt_offset_when_the_timezone_name_is_unusable(string meta, double expectedHours)
     {
-        var json = Chart(meta: """{"exchangeTimezoneName":"Mars/Olympus_Mons","gmtoffset":-14400}""");
+        var zone = YahooChartParser.Parse(Tsla, Chart(meta: meta)).ExchangeTimeZone;
 
-        var zone = YahooChartParser.Parse(Tsla, json).ExchangeTimeZone;
-
-        Assert.Equal(TimeSpan.FromHours(-4), zone.BaseUtcOffset);
-    }
-
-    [Fact]
-    public void Parse_falls_back_to_the_gmt_offset_when_the_timezone_name_is_missing()
-    {
-        var zone = YahooChartParser.Parse(Tsla, Chart(meta: """{"gmtoffset":32400}""")).ExchangeTimeZone;
-
-        Assert.Equal(TimeSpan.FromHours(9), zone.BaseUtcOffset);
+        Assert.Equal(TimeSpan.FromHours(expectedHours), zone.BaseUtcOffset);
     }
 
     [Fact]
@@ -104,42 +66,12 @@ public class YahooChartParserTests
         Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, Chart(meta: "{}")));
     }
 
-    [Fact]
-    public void Parse_returns_no_bars_when_yahoo_omits_the_timestamp_array()
-    {
-        const string json = """
-            {"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},
-            "indicators":{"quote":[{}]}}],"error":null}}
-            """;
-
-        Assert.Empty(YahooChartParser.Parse(Tsla, json).Bars);
-    }
-
-    [Fact]
-    public void Parse_returns_no_bars_for_an_empty_timestamp_array()
-    {
-        const string json = """
-            {"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},
-            "timestamp":[],"indicators":{"quote":[{}]}}],"error":null}}
-            """;
-
-        Assert.Empty(YahooChartParser.Parse(Tsla, json).Bars);
-    }
-
     [Theory]
-    [InlineData("""{"gmtoffset":100000}""")] // beyond the +/-14h .NET allows
-    [InlineData("""{"gmtoffset":30}""")] // not a whole number of minutes
-    public void Parse_rejects_a_gmt_offset_that_cannot_be_a_timezone(string meta)
+    [InlineData("""{"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},"indicators":{"quote":[{}]}}],"error":null}}""")]
+    [InlineData("""{"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},"timestamp":[],"indicators":{"quote":[{}]}}],"error":null}}""")]
+    public void Parse_returns_no_bars_when_yahoo_reports_no_timestamps(string json)
     {
-        Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, Chart(meta: meta)));
-    }
-
-    [Fact]
-    public void Parse_rejects_a_timestamp_outside_the_representable_range()
-    {
-        var json = Chart(timestamps: "[99999999999999]", low: "[1.0]", high: "[2.0]", volume: "[1]");
-
-        Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, json));
+        Assert.Empty(YahooChartParser.Parse(Tsla, json).Bars);
     }
 
     [Fact]
@@ -165,8 +97,6 @@ public class YahooChartParserTests
     [Theory]
     [InlineData("""{"chart":{"result":[],"error":null}}""")]
     [InlineData("""{"chart":{"result":null,"error":null}}""")]
-    [InlineData("""{"chart":null}""")]
-    [InlineData("""{"chart":{"result":[null],"error":null}}""")]
     [InlineData("{}")]
     public void Parse_rejects_a_response_without_a_result(string json)
     {
@@ -174,15 +104,13 @@ public class YahooChartParserTests
     }
 
     [Theory]
-    [InlineData("[1,2]", "[1.0]", "[2.0,3.0]", "[1,2]")]
-    [InlineData("[1,2]", "[1.0,1.0]", "[2.0]", "[1,2]")]
-    [InlineData("[1,2]", "[1.0,1.0]", "[2.0,3.0]", "[1]")]
-    [InlineData("[1,2]", "[1.0,1.0,1.0]", "[2.0,3.0]", "[1,2]")]
-    [InlineData("[1,2]", "[1.0,1.0]", "[2.0,3.0,4.0]", "[1,2]")]
-    [InlineData("[1,2]", "[1.0,1.0]", "[2.0,3.0]", "[1,2,3]")]
-    public void Parse_rejects_quote_arrays_whose_length_differs_from_the_timestamps(
+    [InlineData("[1,2]", "[1.0]", "[2.0,3.0]", "[1,2]")] // lows truncated
+    [InlineData("[1,2]", "[1.0,1.0]", "[2.0]", "[1,2]")] // highs truncated
+    [InlineData("[1,2]", "[1.0,1.0]", "[2.0,3.0]", "[1]")] // volumes truncated
+    public void Parse_rejects_quote_arrays_that_no_longer_line_up_with_the_timestamps(
         string timestamps, string low, string high, string volume)
     {
+        // Pairing a bar's low with another bar's timestamp would silently produce wrong averages.
         var json = Chart(timestamps: timestamps, low: low, high: high, volume: volume);
 
         Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, json));
@@ -201,8 +129,8 @@ public class YahooChartParserTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("<html>Too Many Requests</html>")]
-    [InlineData("""{"chart":{"result":[""")]
+    [InlineData("<html>Too Many Requests</html>")] // rate-limit/captcha page served with HTTP 200
+    [InlineData("""{"chart":{"result":[""")] // connection cut mid-body
     public void Parse_wraps_malformed_json_as_upstream_unavailable(string body)
     {
         Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, body));

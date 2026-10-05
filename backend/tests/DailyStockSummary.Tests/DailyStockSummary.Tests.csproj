@@ -6,12 +6,20 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DailyStockSummary.Api\DailyStockSummary.Api.csproj" />
     <ProjectReference Include="..\..\src\DailyStockSummary.Core\DailyStockSummary.Core.csproj" />
     <ProjectReference Include="..\..\src\DailyStockSummary.Infrastructure\DailyStockSummary.Infrastructure.csproj" />
   </ItemGroup>

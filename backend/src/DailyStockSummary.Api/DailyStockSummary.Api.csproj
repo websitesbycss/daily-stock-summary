@@ -1,3 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <ItemGroup>
+    <ProjectReference Include="..\DailyStockSummary.Core\DailyStockSummary.Core.csproj" />
+    <ProjectReference Include="..\DailyStockSummary.Infrastructure\DailyStockSummary.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
 </Project>
