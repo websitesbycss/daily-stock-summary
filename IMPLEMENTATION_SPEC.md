@@ -9,8 +9,8 @@
 |---|---|---|
 | ~~1~~ | ~~Backend foundation: Yahoo client + aggregation (TDD)~~ | DONE |
 | ~~2~~ | ~~Backend API hardening: endpoint, validation, caching, resilience, integration tests~~ | DONE |
-| 3 | Frontend foundation: scaffold, API client, toasts, symbol input, table + chart per symbol | NOT STARTED |
-| 4 | Frontend dashboard: multi-symbol, draggable/resizable panels, persistence, polish | NOT STARTED |
+| ~~3~~ | ~~Frontend foundation: scaffold, API client, toasts, symbol input, table + chart per symbol~~ | DONE |
+| ~~4~~ | ~~Frontend dashboard: multi-symbol, draggable/resizable panels, persistence, polish~~ | DONE |
 | 5 | Fixes, testing, deployment, deliverables | NOT STARTED |
 
 Status values: `NOT STARTED` · `IN PROGRESS` · `DONE`
@@ -169,10 +169,10 @@ Milestones
 
 ---
 
-## Phase 3 — Frontend Foundation
+## ~~Phase 3 — Frontend Foundation~~
 
 **Goal:** a working single-symbol experience wired to the real backend, with toast-based error handling.
-**Status:** NOT STARTED
+**Status:** DONE (2026-10-04)
 
 Tasks
 1. Scaffold Vite + React + TS (strict) in `frontend/`; ESLint (typescript-eslint, react-hooks), Prettier; `VITE_API_BASE_URL` in `.env.example` (no secrets); dev proxy or CORS to the backend.
@@ -183,20 +183,28 @@ Tasks
 6. Loading skeleton, empty state, error state with retry.
 
 Milestones
-- [ ] `npm run lint` and `npm run build` pass with zero errors/warnings.
-- [ ] Entering `TSLA` shows a table and a chart matching the backend JSON (spot-check 2+ days against `curl`).
-- [ ] Invalid symbol (`!!!`) → client-side toast, no request sent; unknown symbol (`ZZZZZZZZ`) → 404 toast; backend stopped → network-failure toast. Toasts appear in a corner and auto-dismiss.
-- [ ] Table defaults to newest day at the top and columns sort; chart x-axis runs oldest → newest (latest day at the right); numbers formatted (4 dp prices, grouped volume).
-- [ ] Basic Vitest tests for API client error mapping and symbol validation pass.
+- [x] `npm run lint` and `npm run build` pass with zero errors/warnings.
+- [x] Entering `TSLA` shows a table and a chart matching the backend JSON (spot-check 2+ days against `curl`).
+- [x] Invalid symbol (`!!!`) → client-side toast, no request sent; unknown symbol (`ZZZZZZZZ`) → 404 toast; backend stopped → network-failure toast. Toasts appear in a corner and auto-dismiss.
+- [x] Table defaults to newest day at the top and columns sort; chart x-axis runs oldest → newest (latest day at the right); numbers formatted (4 dp prices, grouped volume).
+- [x] Basic Vitest tests for API client error mapping and symbol validation pass.
 
-**Progress Notes:** _(none yet)_
+**Progress Notes:**
+- Built per the approved plan in `frontend/`: Vite 8 + React 19 + TypeScript (strict), TanStack Query, sonner (bottom-right, follows system theme), Recharts, ESLint (typescript-eslint + react-hooks, replacing the template's oxlint) + Prettier, Vitest + React Testing Library. `VITE_API_BASE_URL` documented in `.env.example` (`.env.local` is git-ignored). No dev proxy: the API's CORS allows the Vite origin.
+- Layout: `api/` (types, `ApiError` mapping by ProblemDetails `type` slug with HTTP-status fallback, fetch client), `lib/` (symbol regex mirror, date, number formatting), `notify.ts` (the only module that raises toasts; `describeApiError` also feeds the panel error state), `queries/` (one query per symbol; toasts fire from the QueryCache `onError`, once per failed fetch), `components/` (`SymbolForm`, `StockView` with Chart/Table toggle, `SummaryTable`, `SummaryChart`, `Notifications`). `StockView` (replaced by `Panel` in Phase 4) took only a `symbol`.
+- Date rule (user decision): the frontend never converts time zones and never calls `new Date('yyyy-MM-dd')` (UTC midnight, shows the previous day in the US). `lib/date.ts` works on numeric year/month/day parts; table, chart axis and tooltip share it. Vitest runs under `America/Los_Angeles` (set in `vite.config.ts`) so a regression shows up.
+- Design (frontend-design skill, user chose clean editorial light): cool paper ground, Newsreader (display) + Hanken Grotesk (UI), the symbol field as the large serif centerpiece, no cards or shadows; blue/amber lines for high/low (colour-blind safe), pale slate volume bars; dark mode via `prefers-color-scheme` tokens.
+- Verified: `npm run lint`, `npm run build`, `npm test` (51 tests) clean, `npm audit` 0 vulnerabilities. Driven in headless Chrome against the live backend: `!!!` toast with no request; `ZZZZZZZZ` 404 toast + panel retry; TSLA chart (21 days, Sep 3 to Oct 2, latest right) and table (newest first, 4 dp prices, grouped volume) match the API JSON; browser-offline gives the network toast; toaster at bottom-right; no horizontal scroll at 390 px.
+- Found while verifying: TanStack Query's default `networkMode: 'online'` paused fetches when the browser was offline (skeleton forever, no toast); set `networkMode: 'always'`.
+- Carried forward, resolved in Phase 4: the 670 KB single chunk (the chart is now lazy-loaded) and the missing component tests for panel states.
+
 
 ---
 
-## Phase 4 — Frontend Dashboard (multi-symbol, draggable)
+## ~~Phase 4 — Frontend Dashboard (multi-symbol, draggable)~~
 
 **Goal:** the dashboard experience: many symbols, each with chart + table views, freely rearrangeable.
-**Status:** NOT STARTED
+**Status:** DONE (2026-10-05)
 
 Tasks
 1. Dashboard state (symbols + layout) via a reducer/store; persisted to `localStorage` with safe fallback.
@@ -207,13 +215,22 @@ Tasks
 6. Charts: shared tooltip styling, readable axes at small panel sizes, volume on secondary axis.
 
 Milestones
-- [ ] Add 3+ symbols (e.g. `TSLA`, `AAPL`, `MSFT`); each panel independently toggles Chart ↔ Table.
-- [ ] Dragging a panel by its top bar rearranges the grid smoothly; resize works; layout survives page refresh.
-- [ ] One invalid/failed symbol shows a toast and an error state in its panel only; others unaffected; retry works.
-- [ ] Usable at phone width (no horizontal page scroll) and desktop; lighthouse/axe accessibility check has no critical issues.
-- [ ] `npm run lint` + `npm run build` clean; component tests for panel actions and layout persistence pass.
+- [x] Add 3+ symbols (e.g. `TSLA`, `AAPL`, `MSFT`); each panel independently toggles Chart ↔ Table.
+- [x] Dragging a panel by its top bar rearranges the grid smoothly; resize works; layout survives page refresh.
+- [x] One invalid/failed symbol shows a toast and an error state in its panel only; others unaffected; retry works.
+- [x] Usable at phone width (no horizontal page scroll) and desktop; lighthouse/axe accessibility check has no critical issues.
+- [x] `npm run lint` + `npm run build` clean; component tests for panel actions and layout persistence pass.
 
-**Progress Notes:** _(none yet)_
+**Progress Notes:**
+- Built per the approved plan. Grid: `react-grid-layout` v2 (`Responsive`, drag handle = the panel top bar, buttons excluded, `se` resize handle, minimum panel size 3 columns x 9 rows). Breakpoints by container width: lg >900 px (12 columns, 2 panels per row), md >600 px (8 columns, 2 per row), below that 1 column. Limits: 12 panels (keeps within the backend's 60 requests/minute).
+- State is a pure reducer (`dashboard/dashboardReducer.ts`: add, remove, setView, layoutChange, move) with layout math in `dashboard/layout.ts` (first free slot, reading order, `breakpointForWidth`) and persistence in `dashboard/storage.ts` (key `dss.dashboard.v1`, validated on load; unusable data is copied to `dss.dashboard.v1.bak` and the user is told once; a failed save is reported once). Panels render in reading order so Tab and screen readers follow what is on screen.
+- Layout is saved only from the grid's `onDragStop`/`onResizeStop`, for the breakpoint we pass to the grid (derived from the container width). The grid's `onLayoutChange` is deliberately not used: during unusual viewport jumps it reports layouts it recomputes itself, and a one-column layout ended up stored under `lg` (reproduced with a full-page browser capture, not with ordinary window resizing, which was checked at 1280/800/500/620/1000 px).
+- Keyboard: the grid cannot be dragged by keyboard, so each panel has Move earlier / Move later buttons (`aria-disabled`, so focus stays on the button), refresh and remove; a polite live region announces moves, additions and removals. After a removal focus returns to the symbol field. A duplicate symbol shows a toast, scrolls to and flashes the existing panel, and sends no request.
+- Resilience (from a review pass: code-reviewer, silent-failure-hunter, pr-test-analyzer): error boundary around each panel view (reset by switching view) and one around the app; a failed lazy chart chunk or render error no longer blanks the page; requests time out after 20 s (`timeout` error kind); a 200 that is not an array is an `unexpected` error; 503 and 408 are treated as transient; failures are logged to the console with the status, backend `traceId` and cause; a failed refresh keeps showing the data already loaded (the toast reports it).
+- Fixes found while testing in the browser: a Recharts "Maximum update depth" crash caused by inline object props (hoisted to constants in `SummaryChart`); the Chart/Table toggle losing its base styles (caught by axe in dark mode); focus lost when a move button became disabled; TanStack Query pausing fetches while the browser is offline (`networkMode: 'always'`).
+- Carry-forward from Phase 3 resolved: the chart is lazy-loaded (main bundle 374 kB, chart chunk 375 kB, no size warning); component tests now cover the panel states, retries, refresh, persistence and reordering.
+- Verified: `npm run lint`, `npm run build`, `npm test` (175 tests), `npm audit` (0 vulnerabilities), prettier clean. A mutation spot-check of 7 behaviours (breakpoint, DOM order, error-over-data, array check, slug mapping, duplicate layout items, save-failure notice) is caught by the suite. Driven in headless Chrome against the live backend in light and dark: add TSLA/AAPL/MSFT, per-panel Chart/Table, drag by the title bar, resize (552x582 to 741x674), reload restores order/size/views, one failing symbol isolated with Try again, duplicate handling, keyboard move, removal, axe (no violations), 390 px phone width without horizontal scroll.
+- Known limits: jsdom has no layout engine, so the grid is stubbed in the component tests (drag/resize/reflow are verified in the browser only); rapid repeated browser runs hit the backend's rate limit (429), which is expected; in React StrictMode (dev only) each symbol is fetched twice, the first request being cancelled.
 
 ---
 
@@ -247,3 +264,5 @@ Milestones
 - 2026-10-04 — Ascending day order decided by user (table shows newest first on the frontend).
 - 2026-10-04 — Phase 1 complete (64 tests, zero warnings, live smoke check passed). Symbol regex tightened; Phase 2 gained carried-over review items; Phase 5 gained a tzdata check.
 - 2026-10-04 — Phase 2 complete (178 tests, zero warnings, live check passed). Compression and OpenAPI viewer dropped by decision; cache rewritten without MemoryCache after review; Phase 5 gained forwarded-headers handling.
+- 2026-10-04 — Phase 3 complete (51 frontend tests, lint/build clean, live browser check passed). Date rule recorded: frontend never converts time zones or parses day strings with `new Date`.
+- 2026-10-05 — Phase 4 complete (175 frontend tests, lint/build/audit clean, live browser check in light and dark). Layout is persisted from drag/resize stops only; panels are wrapped in error boundaries; 12-panel cap.

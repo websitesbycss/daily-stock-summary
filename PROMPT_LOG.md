@@ -44,3 +44,11 @@ Adjustments: Kept after testing verified successful completion of phases 1-2.
 Prompt: "/compact summarize this conversation and what to do next for a new claude code session and put the summary into a temp text file in the repo root called temp.txt"
 Reasoning: I compacted the session window to save tokens and also to move the claude code session from my laptop to my desktop computer, and providing a description after the /compact command was the perfect way to direct a summary into a medium that will transport to my desktop.
 Adjustments: None
+
+Prompt: "Read temp.txt and IMPLEMENTATION_SPEC.md and any other context you need. Go for phase 3. Use the frontend-design skill"
+Reasoning:
+Adjustments:
+
+Prompt: "Good job. Go ahead and begin phase 4 and resolve any remaining things to do until phase 5"
+Reasoning:
+Adjustments:
