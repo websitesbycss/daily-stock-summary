@@ -171,9 +171,12 @@ public class DailySummaryEndpointTests
     }
 
     [Theory]
-    [InlineData("%5EGSPC", "%5EGSPC")] // ^GSPC (S&P 500 index)
+    [InlineData("%5EGSPC", "%5EGSPC")] // ^GSPC (S&P 500 index), as a client that escapes everything sends it
+    [InlineData("^GSPC", "%5EGSPC")] // the same symbol typed as is
     [InlineData("EURUSD%3DX", "EURUSD%3DX")] // EURUSD=X (currency pair)
+    [InlineData("EURUSD=X", "EURUSD%3DX")] // browsers send = unescaped
     [InlineData("BRK-B", "BRK-B")]
+    [InlineData("VOD.L", "VOD.L")] // London listing
     public async Task Symbols_with_special_characters_reach_yahoo_correctly_escaped(string routeSymbol, string expectedInYahooUrl)
     {
         var yahoo = StubHttpMessageHandler.Responding(_ => RealTeslaMonth());
@@ -183,7 +186,39 @@ public class DailySummaryEndpointTests
         var response = await client.GetAsync($"/api/stocks/{routeSymbol}/daily-summary");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains($"/v8/finance/chart/{expectedInYahooUrl}?", Assert.Single(yahoo.Requests).RequestUri!.OriginalString, StringComparison.Ordinal);
+        Assert.Equal(
+            $"/v8/finance/chart/{expectedInYahooUrl}?interval=15m&range=1mo",
+            Assert.Single(yahoo.Requests).RequestUri!.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task A_200_response_that_says_the_symbol_was_not_found_becomes_a_404_problem()
+    {
+        // Yahoo reports some unknown symbols in the body with a 200 status instead of a 404 status.
+        const string body = """{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}""";
+        using var app = new ApiTestApp(StubHttpMessageHandler.Responding(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) }));
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync("/api/stocks/zzzzzzzz/daily-summary");
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("urn:daily-stock-summary:problem:symbol-not-found", problem.RootElement.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task A_200_response_with_an_empty_result_list_becomes_a_502_problem()
+    {
+        using var app = new ApiTestApp(StubHttpMessageHandler.Responding(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"chart":{"result":[],"error":null}}""") }));
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync("/api/stocks/tsla/daily-summary");
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.Equal("urn:daily-stock-summary:problem:upstream-unavailable", problem.RootElement.GetProperty("type").GetString());
     }
 
     [Fact]

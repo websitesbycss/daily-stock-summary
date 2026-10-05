@@ -255,6 +255,20 @@ public class ApiHostingTests
         Assert.Equal(HttpStatusCode.TooManyRequests, await GetAsClientAsync(client, "10.0.0.1"));
     }
 
+    [Fact]
+    public async Task An_ipv6_client_cannot_get_fresh_allowances_by_changing_the_low_bits_of_its_address()
+    {
+        // A home connection is handed a whole /64 (2^64 addresses). Keying on the full address would let one
+        // machine rotate through them; the network prefix is the client.
+        using var app = App(ApiTestApp.With(("RateLimiting:PermitLimit", "2")));
+        using var client = app.CreateClient();
+
+        Assert.Equal(HttpStatusCode.OK, await GetAsClientAsync(client, "2001:db8:1:2::1"));
+        Assert.Equal(HttpStatusCode.OK, await GetAsClientAsync(client, "2001:db8:1:2::2"));
+        Assert.Equal(HttpStatusCode.TooManyRequests, await GetAsClientAsync(client, "2001:db8:1:2:ffff:abcd:1234:9"));
+        Assert.Equal(HttpStatusCode.OK, await GetAsClientAsync(client, "2001:db8:1:3::1")); // a different /64
+    }
+
     // ---- Caching through the real container
 
     [Fact]

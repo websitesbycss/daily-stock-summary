@@ -54,6 +54,24 @@ public class YahooChartParserLoggingTests
     }
 
     [Fact]
+    public void Dropping_bars_that_cannot_be_real_is_counted_in_the_same_warning()
+    {
+        var logger = new FakeLogger();
+        var json = Chart(
+            timestamps: "[1,2,3,4]",
+            low: "[1.0,null,0,4.0]", // one missing, one zero price
+            high: "[2.0,2.5,3.0,5.0]",
+            volume: "[10,20,30,-5]"); // and one negative volume
+
+        YahooChartParser.Parse(Tsla, json, logger);
+
+        var record = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.True(Has(record, "DroppedBars", "3"));
+        Assert.True(Has(record, "TotalBars", "4"));
+    }
+
+    [Fact]
     public void A_clean_real_response_produces_no_warnings()
     {
         var logger = new FakeLogger();

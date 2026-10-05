@@ -11,7 +11,7 @@
 | ~~2~~ | ~~Backend API hardening: endpoint, validation, caching, resilience, integration tests~~ | DONE |
 | ~~3~~ | ~~Frontend foundation: scaffold, API client, toasts, symbol input, table + chart per symbol~~ | DONE |
 | ~~4~~ | ~~Frontend dashboard: multi-symbol, draggable/resizable panels, persistence, polish~~ | DONE |
-| 5 | Fixes, testing, deployment, deliverables | NOT STARTED |
+| 5 | Fixes, testing, deployment, deliverables | IN PROGRESS (built and verified locally; Docker, CI and the manual-changes write-up remain) |
 
 Status values: `NOT STARTED` · `IN PROGRESS` · `DONE`
 
@@ -237,7 +237,7 @@ Milestones
 ## Phase 5 — Fixes, Testing, Deployment
 
 **Goal:** release-quality repo a reviewer can clone, run, and trust.
-**Status:** NOT STARTED
+**Status:** IN PROGRESS (2026-10-05)
 
 Tasks
 1. Full bug sweep from manual end-to-end testing; run `pr-review-toolkit` review passes and `/code-review`; fix findings.
@@ -248,13 +248,21 @@ Tasks
 6. `.gitignore` finalized (`.env.local`, `bin/`, `obj/`, `node_modules/`, `dist/`, IDE files).
 
 Milestones
-- [ ] Fresh clone → follow README only → backend and frontend run locally and the full flow works.
-- [ ] `docker compose up` brings up both services; the UI works against the containerized API.
-- [ ] CI green (backend tests, frontend lint/build/tests).
-- [ ] `dotnet list package --vulnerable` and `npm audit` show no high/critical issues (or documented exceptions).
-- [ ] Prompt log complete; manual-changes write-up present; spec statuses all `DONE`.
+- [x] README-only run of both services works locally: the documented commands (`dotnet run`, `npm ci` + `npm run dev`) were run and the full flow verified in a browser. (Not done from a fresh clone.)
+- [ ] `docker compose up` brings up both services and the UI works against the containerized API. **Not verified: Docker is not installed on the authoring machine.** The files are written and statically reviewed; the CI `containers` job builds both images and smoke-tests them through nginx on the first push.
+- [ ] CI green (backend tests, frontend lint/build/tests, container smoke test). **Workflow written and its YAML validated; it has not run yet** (nothing has been pushed).
+- [x] `dotnet list package --vulnerable --include-transitive` and `npm audit`: no vulnerabilities. Repo scanned for secrets: none.
+- [ ] Prompt log complete; manual-changes write-up present. `PROMPT_LOG.md` has every prompt, but the Reasoning/Adjustments fields and `manual-changes.txt` (empty) are the author's to fill in.
 
-**Progress Notes:** _(none yet)_
+**Progress Notes:**
+- Done, backend (test-first; 224 to 229 tests): `ForwardedHeaders` settings (`Enabled` default false, CIDR `KnownNetworks`, `ForwardLimit`) validated at startup and wired before the rate limiter, trusting only the listed networks (the framework's default loopback trust is cleared) and reading only the nearest proxy hop; `TimeZoneDataStartupCheck` (host fails to start when `America/New_York`, `Europe/London` or `Asia/Tokyo` is missing); security headers on every API response including errors (set in `OnStarting` so the exception handler cannot strip them); IPv6 clients rate-limited per /64 (found in review: rotating low address bits earned a fresh allowance).
+- Decision (sanity filters, carried from Phase 1): the parser now drops bars with a non-positive price, a low above the high, or a negative volume, and counts them in the existing dropped-bars warning. Negative volume silently corrupted day totals; zero-price bars occur on thin FX/illiquid instruments. Flat bars and zero-volume bars are real and kept. Duplicate or unsorted timestamps are left as they are (harmless to averages). A bar with a null low/high but real volume still loses its volume (deliberate, documented in the README).
+- Done, tests from the backend audit: schema drift (null/missing `indicators`, `quote`, series, `result: [null]`, unknown extra fields, decimal volume = 502), HTTP-level 200 + `chart.error` (404) and 200 + empty result (502), raw and escaped route forms for `^GSPC`, `EURUSD=X`, `VOD.L`, `BRK-B` asserted against the real upstream path, calculator cases (weekend gap, short trading day, New York fall-back day, zero-volume day), and an IPv4-mapped proxy peer. A mutation check of 9 behaviours (UTC bucketing, unescaped symbols, flat-bar filter, negative volume, loopback trust, trusting everyone, forward limit, header timing, tz check) is caught by the suite; two initial survivors (loopback `::1`, `ForwardLimit`) got tests.
+- Done, deployment files: `backend/Dockerfile` (multi-stage, non-root), `frontend/Dockerfile` (node build, `nginx-unprivileged`), `frontend/nginx.conf` + `security-headers.conf` (SPA fallback, gzip, immutable hashed assets, `no-cache` index, `/api/` proxy with `X-Forwarded-For` appended, DNS re-resolution), `docker-compose.yml` (only `web` published on 8080; `ForwardedHeaders__*` set for the private ranges; `cap_drop: ALL`), `.dockerignore` files, `.github/workflows/ci.yml` (backend, frontend, containers jobs), `.gitattributes` (LF), rewritten `.gitignore`.
+- Done, same-origin and CSP check without Docker: the Release build was published and run in Production mode with the compose environment (JSON logs, tz check passing, per-client rate limiting over real HTTP with `X-Forwarded-For`, spoofed prefixes ignored); the SPA was built with an empty `VITE_API_BASE_URL` and served behind a proxy with the exact CSP and headers from `security-headers.conf`, then driven in headless Chrome. This found that the first CSP broke the toast library's injected stylesheet and inlined `data:` fonts; `style-src` now allows inline styles and `font-src` allows `data:`, with `script-src 'self'` kept strict. Zero CSP violations afterwards.
+- Reviews (code-reviewer on the backend changes, a static review of Docker/nginx/compose/CI files): fixed the README being saved as UTF-16 (would render as binary on GitHub), the CI race (waiting on nginx instead of the API), a CI assertion that used `HEAD`, a redundant `ASPNETCORE_URLS`, nginx caching the `api` address, and a wrong base-image comment. The static review could not execute any container tooling.
+- Remaining (for the author): (1) push and confirm the CI run is green, in particular the `containers` job, which is the first real build of the Dockerfiles, nginx config and compose file; (2) fill in `manual-changes.txt` and the Reasoning/Adjustments fields in `PROMPT_LOG.md`; (3) run `git add --renormalize .` once so existing files get the LF line endings that `.gitattributes` now asks for; (4) consider `git rm temp.txt` (the session hand-off note is committed but not part of the deliverable). When (1) and (2) are done, strike this phase through and set it to DONE.
+- Decisions and non-goals: nginx serves the app and proxies `/api/` (same origin, no CORS needed in containers); Playwright end-to-end tests were skipped (optional in the plan; browser flows were verified with scripted headless-Chrome runs that are not part of the repo); the SDK image tag floats (`10.0`) while `global.json` pins `10.0.401` with feature roll-forward.
 
 ---
 
@@ -266,3 +274,4 @@ Milestones
 - 2026-10-04 — Phase 2 complete (178 tests, zero warnings, live check passed). Compression and OpenAPI viewer dropped by decision; cache rewritten without MemoryCache after review; Phase 5 gained forwarded-headers handling.
 - 2026-10-04 — Phase 3 complete (51 frontend tests, lint/build clean, live browser check passed). Date rule recorded: frontend never converts time zones or parses day strings with `new Date`.
 - 2026-10-05 — Phase 4 complete (175 frontend tests, lint/build/audit clean, live browser check in light and dark). Layout is persisted from drag/resize stops only; panels are wrapped in error boundaries; 12-panel cap.
+- 2026-10-05 — Phase 5 built and verified as far as the authoring machine allows (229 backend tests, 175 frontend tests, audits clean). Docker/CI unverified until the first push; manual-changes write-up and PROMPT_LOG fields are the author's. Phase 5 stays IN PROGRESS.

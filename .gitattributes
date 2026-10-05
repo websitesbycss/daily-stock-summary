@@ -1,0 +1,9 @@
+# Keep line endings the same on every machine. Dockerfiles, nginx config, shell snippets and the CI workflow
+# break or fail format checks when Windows converts them to CRLF.
+* text=auto eol=lf
+
+# Binary files are never converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

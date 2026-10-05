@@ -117,4 +117,78 @@ public class DailySummaryCalculatorTests
 
         Assert.Equal([new DateOnly(2026, 9, 8), new DateOnly(2026, 9, 9), new DateOnly(2026, 9, 10)], days);
     }
+
+    [Fact]
+    public void Calculate_has_no_entry_for_days_the_market_was_closed()
+    {
+        // Friday and the following Monday: nothing for the weekend between them.
+        var series = Series(
+            NewYork,
+            Bar(new DateTimeOffset(2026, 9, 11, 15, 45, 0, Edt), 10m, 11m, 100),
+            Bar(Edt930(9, 14), 12m, 13m, 200));
+
+        var result = _calculator.Calculate(series);
+
+        Assert.Equal([new DateOnly(2026, 9, 11), new DateOnly(2026, 9, 14)], result.Select(day => day.Day));
+    }
+
+    [Fact]
+    public void Calculate_handles_a_short_trading_day_with_only_a_few_bars()
+    {
+        // The day after Thanksgiving closes at 1 pm Eastern, and this window has just three bars (EST, UTC-5).
+        var est = TimeSpan.FromHours(-5);
+        var open = new DateTimeOffset(2026, 11, 27, 9, 30, 0, est);
+        var series = Series(
+            NewYork,
+            Bar(open, 10m, 11m, 1),
+            Bar(open.AddMinutes(15), 12m, 13m, 2),
+            Bar(open.AddMinutes(30), 14m, 15m, 3));
+
+        var result = Assert.Single(_calculator.Calculate(series));
+
+        Assert.Equal(new DailySummary(new DateOnly(2026, 11, 27), 12m, 13m, 6), result);
+    }
+
+    [Fact]
+    public void Calculate_keeps_the_repeated_hour_of_the_daylight_saving_fall_back_in_one_day()
+    {
+        // New York leaves daylight time on 2026-11-01 (the 01:00 hour happens twice). Instants in UTC:
+        //   04:30Z = 00:30 EDT (Nov 1)   06:30Z = 01:30 EST (Nov 1)   Nov 2 04:59Z = 23:59 EST (Nov 1)
+        //   Nov 2 05:00Z = 00:00 EST (Nov 2). Bucketing by UTC date would wrongly move the third bar to Nov 2.
+        var utc = TimeSpan.Zero;
+        var series = Series(
+            NewYork,
+            Bar(new DateTimeOffset(2026, 11, 1, 4, 30, 0, utc), 1m, 2m, 10),
+            Bar(new DateTimeOffset(2026, 11, 1, 6, 30, 0, utc), 2m, 3m, 20),
+            Bar(new DateTimeOffset(2026, 11, 2, 4, 59, 0, utc), 3m, 4m, 30),
+            Bar(new DateTimeOffset(2026, 11, 2, 5, 0, 0, utc), 5m, 6m, 7));
+
+        var result = _calculator.Calculate(series);
+
+        Assert.Equal(
+            [
+                new DailySummary(new DateOnly(2026, 11, 1), 2m, 3m, 60),
+                new DailySummary(new DateOnly(2026, 11, 2), 5m, 6m, 7),
+            ],
+            result);
+    }
+
+    [Fact]
+    public void Calculate_reports_zero_volume_for_a_day_where_nothing_traded_but_still_averages_the_prices()
+    {
+        var series = Series(
+            NewYork,
+            Bar(Edt930(9, 8, 0), 1.0m, 2.0m, 0),
+            Bar(Edt930(9, 8, 15), 3.0m, 4.0m, 0),
+            Bar(Edt930(9, 9, 0), 5.0m, 6.0m, 7));
+
+        var result = _calculator.Calculate(series);
+
+        Assert.Equal(
+            [
+                new DailySummary(new DateOnly(2026, 9, 8), 2.0m, 3.0m, 0),
+                new DailySummary(new DateOnly(2026, 9, 9), 5.0m, 6.0m, 7),
+            ],
+            result);
+    }
 }

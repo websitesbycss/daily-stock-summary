@@ -25,7 +25,8 @@ public sealed class ApiTestApp : IDisposable
         StubHttpMessageHandler yahoo,
         IReadOnlyDictionary<string, string?>? settings = null,
         string environment = "Development",
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var merged = new Dictionary<string, string?>
         {
@@ -47,6 +48,7 @@ public sealed class ApiTestApp : IDisposable
             {
                 services.AddHttpClient<YahooFinanceClient>().ConfigurePrimaryHttpMessageHandler(() => yahoo);
                 services.AddTransient<IStartupFilter, SimulatedClientAddressStartupFilter>();
+                configureServices?.Invoke(services);
 
                 if (timeProvider is not null)
                 {

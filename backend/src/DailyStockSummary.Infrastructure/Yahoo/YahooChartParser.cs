@@ -72,8 +72,10 @@ internal static partial class YahooChartParser
 
         for (var i = 0; i < timestamps.Count; i++)
         {
-            // Yahoo emits null for bars it has no data for; a bar needs both a low and a high to count.
-            if (lows[i] is { } low && highs[i] is { } high)
+            // Yahoo emits null for bars it has no data for; a bar needs both a low and a high to count. It also
+            // occasionally sends bars that cannot be real (zero prices, an inverted range, negative volume), which
+            // would skew a day's averages and total, so those are dropped too.
+            if (lows[i] is { } low && highs[i] is { } high && volumes[i] is null or >= 0 && low > 0 && low <= high)
             {
                 bars.Add(new IntradayBar(
                     DateTimeOffset.FromUnixTimeSeconds(timestamps[i]),
@@ -120,7 +122,7 @@ internal static partial class YahooChartParser
     [LoggerMessage(Level = LogLevel.Warning, Message = "Exchange time zone {ZoneName} is unavailable for {Symbol}; using a fixed offset of {OffsetSeconds}s that ignores daylight saving.")]
     private static partial void LogTimeZoneFallback(ILogger logger, string symbol, string zoneName, int offsetSeconds);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Dropped {DroppedBars} of {TotalBars} bars for {Symbol} because Yahoo reported no low or high.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dropped {DroppedBars} of {TotalBars} bars for {Symbol} because Yahoo reported no usable low, high or volume for them.")]
     private static partial void LogDroppedBars(ILogger logger, string symbol, int droppedBars, int totalBars);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Yahoo returned no bars at all for {Symbol}.")]

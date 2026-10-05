@@ -1,0 +1,44 @@
+# Runs the whole app: http://localhost:8080
+#   docker compose up --build
+#
+# Only the web container is published. It serves the UI and proxies /api/ to the API container, so the browser
+# sees a single origin.
+services:
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Trust X-Forwarded-For only from the private ranges Docker networks use; nginx is the only peer that can
+      # reach this container because it is not published.
+      ForwardedHeaders__Enabled: "true"
+      ForwardedHeaders__KnownNetworks__0: 10.0.0.0/8
+      ForwardedHeaders__KnownNetworks__1: 172.16.0.0/12
+      ForwardedHeaders__KnownNetworks__2: 192.168.0.0/16
+      # Other settings can be overridden the same way, for example:
+      # RateLimiting__PermitLimit: "120"
+      # Yahoo__CacheTtl: "00:02:00"
+    expose:
+      - "8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Empty = same origin (see frontend/Dockerfile).
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

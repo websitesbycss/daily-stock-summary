@@ -16,22 +16,20 @@ I have added a skill to .claude/skills:
 test-driven-development: this should be used primarily for backend development, for testing API logic and other backend features. Do not use it for frontend development.
 
 I am going to use commands after I send this prompt to add frontend-design and pr-review-toolkit to improve efficiency. Ready to get started."
-Reasoning:
-Adjustments:
+Reasoning: I wanted to create a source of truth for Claude Code to go back to any time it had a design question, and creating an implementation spec was perfect for that. The prompt contains detailed instructions for my tech stack (.NET 10 and React), general requirements for quality of output, and even a suggestion to help me fill out this file, PROMPT_LOG.md.
+Adjustments: None
 
-Prompt: "/plugin marketplace add anthropics/claude-plugins-official
-/plugin install pr-review-toolkit@claude-plugins-official
-I addressed #1 and #2. Check #2. I just renamed it to PROMPT_LOG.md, thanks for checking that. What do you mean for #4?"
-Reasoning:
-Adjustments:
+Prompt: "I addressed #1 and #2. Check #2. I just renamed it to PROMPT_LOG.md, thanks for checking that. What do you mean for #4?"
+Reasoning: Claude gave me a list of initial improvements to get into before beginning phase 1. One of the issues was about a file name mismatch.
+Adjustments: None
 
 Prompt: "Let's do ascending, because we'll have most recent days at the top of the stock history table and then at the right of graphs."
-Reasoning:
-Adjustments:
+Reasoning: Having the most recent days at the top of the stock history table is key for providing a good user experience; stock purchasing/selling decisions happen primarily on recent data.
+Adjustments: Claude asked a series of questions, including how stock tables should look (ascending vs. descending days). Answer is given in prompt.
 
 Prompt: "I installed the .NET 10 SDK. Verify it and let's go into planning mode for Phase 1."
-Reasoning:
-Adjustments:
+Reasoning: I had not yet installed the .NET 10 SDK on my laptop. After it was installed, everything was ready to begin phase 1.
+Adjustments: None
 
 Prompt: "Good job with phase 1! I want to confirm that you are writing high quality tests. Don't just write tests that do assertions like result.Should().NotBeEmpty(), test something real that happens through actual calculations or processes. Test for real, tangible scenarios, not fake scenarios made up to have tests pass and to get coverage. So review your phase 1 tests for this, and if you have no changes to make, go ahead to phase 2."
 Reasoning: Upon inspection of Claude's created tests, I found some low quality ones. Thus, I found it necessary to reinforce good test quality for the recently created tests and future ones as well.
@@ -46,9 +44,13 @@ Reasoning: I compacted the session window to save tokens and also to move the cl
 Adjustments: None
 
 Prompt: "Read temp.txt and IMPLEMENTATION_SPEC.md and any other context you need. Go for phase 3. Use the frontend-design skill"
-Reasoning:
-Adjustments:
+Reasoning: After moving to desktop, gave Claude the necessary instructions to begin a new conversation. Told it to use frontend-design skill to make a good UI for the frontend.
+Adjustments: None
 
 Prompt: "Good job. Go ahead and begin phase 4 and resolve any remaining things to do until phase 5"
-Reasoning:
-Adjustments:
+Reasoning: Phase 3 worked with no issues from eslint, npm run build, or anything really. Further frontend testing could not be done until phase 4 was complete.
+Adjustments: None
+
+Prompt: "Go for phase 5"
+Reasoning: I tested phase 4's result by running the backend in one powershell terminal via dotnet run, and then the frontend in another terminal via npm run dev. The frontend was then accessible on localhost, where I was able to successfully test the daily stock summary capabilities, including both chart and table views, multiple stock symbols viewable, and fluid, adjustable layouts. Phase 5 is the last round, consisting of general improvements and cleanup where needed.
+Adjustments: None

@@ -1,10 +1,31 @@
+# Secrets: never commit environment files (Yahoo needs no key, but this stays as a safeguard)
 *.env
 .env
 env
 /*.env
 .env.local
+
+# Build output
 bin/
 obj/
-node_modules/
 dist/
+node_modules/
+coverage/
+TestResults/
+
+# IDE and OS files
+.vs/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local Claude Code settings (the shared .claude/settings.json is tracked)
+.claude/settings.local.json
+
+# Session handoff notes
 temp.txt

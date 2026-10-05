@@ -50,6 +50,41 @@ public class YahooChartParserTests
         Assert.Equal([0L, 200L], bars.Select(b => b.Volume));
     }
 
+    // Yahoo sometimes emits bars that cannot be real, notably zero prices on thin FX and illiquid instruments.
+    // Averaging them in would drag a day's averages down, and a negative volume would shrink the day's total.
+    [Theory]
+    [InlineData("0", "3.0", "20")] // a price of zero
+    [InlineData("-1.0", "3.0", "20")] // a negative price
+    [InlineData("1.0", "0", "20")] // a high of zero
+    [InlineData("5.0", "4.0", "20")] // low above high
+    [InlineData("1.0", "2.0", "-5")] // negative volume
+    public void Parse_drops_a_bar_that_cannot_be_real_and_keeps_its_neighbours(string badLow, string badHigh, string badVolume)
+    {
+        var json = Chart(
+            timestamps: "[1,2,3]",
+            low: $"[1.0,{badLow},2.0]",
+            high: $"[2.0,{badHigh},3.0]",
+            volume: $"[10,{badVolume},50]");
+
+        var bars = YahooChartParser.Parse(Tsla, json).Bars;
+
+        Assert.Equal(
+            [
+                new IntradayBar(DateTimeOffset.FromUnixTimeSeconds(1), 1.0m, 2.0m, 10),
+                new IntradayBar(DateTimeOffset.FromUnixTimeSeconds(3), 2.0m, 3.0m, 50),
+            ],
+            bars);
+    }
+
+    [Fact]
+    public void Parse_keeps_flat_bars_and_bars_with_no_volume_because_they_are_real()
+    {
+        // An illiquid minute: nothing traded and the price did not move.
+        var bars = YahooChartParser.Parse(Tsla, Chart(timestamps: "[1]", low: "[4.5]", high: "[4.5]", volume: "[0]")).Bars;
+
+        Assert.Equal([new IntradayBar(DateTimeOffset.FromUnixTimeSeconds(1), 4.5m, 4.5m, 0)], bars);
+    }
+
     [Theory]
     [InlineData("""{"exchangeTimezoneName":"Unknown/Zone","gmtoffset":19800}""", 5.5)] // India: a half-hour offset
     [InlineData("""{"gmtoffset":32400}""", 9.0)] // Japan, name omitted
@@ -134,5 +169,49 @@ public class YahooChartParserTests
     public void Parse_wraps_malformed_json_as_upstream_unavailable(string body)
     {
         Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, body));
+    }
+
+    [Theory]
+    [InlineData("""{"chart":{"result":[null],"error":null}}""")] // a result list holding null
+    [InlineData("""{"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},"timestamp":[1,2],"indicators":null}],"error":null}}""")]
+    [InlineData("""{"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},"timestamp":[1,2],"indicators":{"quote":null}}],"error":null}}""")]
+    [InlineData("""{"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400},"timestamp":[1,2],"indicators":{"quote":[]}}],"error":null}}""")]
+    public void Parse_rejects_responses_where_the_structure_has_drifted(string json)
+    {
+        Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, json));
+    }
+
+    [Theory]
+    [InlineData("null", "[2.0,3.0]", "[1,2]")]
+    [InlineData("[1.0,1.0]", "null", "[1,2]")]
+    [InlineData("[1.0,1.0]", "[2.0,3.0]", "null")]
+    public void Parse_rejects_a_missing_low_high_or_volume_series(string low, string high, string volume)
+    {
+        var json = Chart(timestamps: "[1,2]", low: low, high: high, volume: volume);
+
+        Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, json));
+    }
+
+    [Fact]
+    public void Parse_reports_an_error_instead_of_guessing_when_volume_arrives_as_a_decimal_number()
+    {
+        // Volume is a whole number of shares. If Yahoo ever changes that, failing loudly (a 502) beats rounding silently.
+        var json = Chart(volume: "[1.0E7,200]");
+
+        Assert.Throws<UpstreamUnavailableException>(() => YahooChartParser.Parse(Tsla, json));
+    }
+
+    [Fact]
+    public void Parse_ignores_fields_it_does_not_know_about()
+    {
+        const string json = """
+            {"chart":{"result":[{"meta":{"exchangeTimezoneName":"America/New_York","gmtoffset":-14400,"somethingNew":{"a":1}},
+            "timestamp":[1],"newTopLevel":[1,2,3],
+            "indicators":{"quote":[{"low":[1.0],"high":[2.0],"volume":[5],"vwap":[1.5]}],"adjclose":[{"adjclose":[1.0]}]}}],"error":null}}
+            """;
+
+        var bars = YahooChartParser.Parse(Tsla, json).Bars;
+
+        Assert.Equal([new IntradayBar(DateTimeOffset.FromUnixTimeSeconds(1), 1.0m, 2.0m, 5)], bars);
     }
 }
