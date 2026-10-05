@@ -8,7 +8,7 @@
 | Phase | Scope | Status |
 |---|---|---|
 | ~~1~~ | ~~Backend foundation: Yahoo client + aggregation (TDD)~~ | DONE |
-| 2 | Backend API hardening: endpoint, validation, caching, resilience, integration tests | NOT STARTED |
+| ~~2~~ | ~~Backend API hardening: endpoint, validation, caching, resilience, integration tests~~ | DONE |
 | 3 | Frontend foundation: scaffold, API client, toasts, symbol input, table + chart per symbol | NOT STARTED |
 | 4 | Frontend dashboard: multi-symbol, draggable/resizable panels, persistence, polish | NOT STARTED |
 | 5 | Fixes, testing, deployment, deliverables | NOT STARTED |
@@ -113,7 +113,7 @@ Tasks
 6. `StockSummaryService` wiring provider + calculator (TDD with fake provider).
 
 Milestones (all must pass before Phase 2)
-- [x] `dotnet build` clean with zero warnings; `dotnet test` green (83 tests).
+- [x] `dotnet build` clean with zero warnings; `dotnet test` green (64 tests after the test-quality review).
 - [x] Calculator tests prove exact output for a hand-computed fixture (values to 4 dp, volume as integer).
 - [x] Timezone bucketing test passes for a non-UTC exchange (Tokyo) and for DST-sensitive New York instants.
 - [x] Client tests cover success, unknown symbol, 5xx, timeout, caller cancellation, malformed JSON.
@@ -125,21 +125,23 @@ Milestones (all must pass before Phase 2)
 - Deviations from the original spec: solution file is `.slnx`; null-bar handling lives in the parser (calculator only sees complete bars); `Api` project is an empty stub (host is Phase 2); `Microsoft.Extensions.Http` / logging packages deferred to Phase 2 (not needed yet); `CA1707` (underscores in names) is disabled for `tests/` only via `tests/.editorconfig`.
 - Review pass (pr-review-toolkit code-reviewer, silent-failure-hunter, pr-test-analyzer) found and we fixed: dot-only symbols (`.`/`..`) altering the upstream URL, non-ASCII letters normalizing into valid symbols, `"result":[null]` crashing, any HTTP 404 being reported as "symbol not found". Added tests for those plus token forwarding, 5xx-with-valid-body, bad `gmtoffset`, out-of-range timestamps, longer-than-timestamps arrays, empty `timestamp`, DST bucketing, digit symbols, default options. A mutation check (6 mutations: token dropped, status check removed, DST ignored, length check loosened, digits removed from regex, empty-timestamp boundary) was caught by the suite each time.
 - Deliberate decision kept: a response with a missing/empty `timestamp` yields `[]` (a valid but illiquid symbol may legitimately have no bars) rather than a 502.
+- Test-quality review (user request, same day): removed coverage-driven or fabricated tests (impossible `gmtoffset`/timestamp values, 5xx-with-valid-body, a stub-rethrows-what-it-is-told cancellation test, a record-equality test, mock-call assertions) and the two defensive branches that only they covered. Strengthened: fallback timezone now tested with a real half-hour offset (India, 19800s), timeouts use a real `HttpClient` timeout, service tests check behavior (right symbol's data, cancellation) not recorded calls. Added `Pipeline/RealDataPipelineTests`: a full real month of TSLA (547 bars, `Fixtures/tsla-15m-one-month.json`) through the real client, parser, calculator and service, asserted against values computed independently in Node, including the Labor Day gap, no weekend days, a 27-bar day (Yahoo appends the closing print to the latest day) and total volume. The two-day fixture was replaced by this single real fixture. Suite is now 64 tests; a 13-mutation check was caught every time. Shared helpers live in `tests/.../TestSupport/` (`StubHttpMessageHandler`, `TestFixtures`).
+- Test rule going forward: expected values come from independent derivation or real captured data; no assertions that only check non-emptiness or that a mock was called; no tests for inputs the real world cannot produce; every test names a real scenario (a user symbol, a Yahoo response, an operational failure).
 - Carried forward (not done in Phase 1, see Phase 2/5 tasks): logging when the `gmtoffset` timezone fallback is used; Polly exception mapping; options validation; tzdata in Docker; sanity filters for garbage bars.
 
 ---
 
-## Phase 2 — Backend API & Hardening
+## ~~Phase 2 — Backend API & Hardening~~
 
 **Goal:** a production-grade HTTP API exposing the service, runnable locally, covered by integration tests.
-**Status:** NOT STARTED
+**Status:** DONE (2026-10-04)
 
 Tasks
 1. Minimal API host: `GET /api/stocks/{symbol}/daily-summary`, `GET /health`, DI registrations, options binding + validation on start.
 2. Global `IExceptionHandler` → `ProblemDetails` (400/404/502/504/500) with stable `type`/`title` and a correlation/trace id; no stack traces or upstream bodies leaked.
 3. `CachingMarketDataProvider` decorator (configurable TTL; cache key = normalized symbol; do not cache failures).
 4. Resilience pipeline on the Yahoo `HttpClient` (retry w/ jitter on transient errors, timeout, circuit breaker).
-5. CORS (config-driven origins; default `http://localhost:5173`), rate limiting (per-IP fixed window), response compression, OpenAPI (+ viewer in Development only), structured logging.
+5. CORS (config-driven origins; default `http://localhost:5173`), rate limiting (per-IP fixed window), ~~response compression~~ (dropped by decision: payload is ~2 KB; nginx can compress in Phase 5), OpenAPI JSON document in Development only (~~viewer~~ dropped by decision: no UI package), structured logging.
 6. **TDD** with `WebApplicationFactory`: integration tests replacing `IMarketDataProvider` with a fake.
 7. **Carried over from the Phase 1 review:**
    - Register the Yahoo client with `AddHttpClient` (needs `Microsoft.Extensions.Http`), set a sane `MaxResponseContentBufferSize` (a few MB; default is 2 GB) and validate `YahooOptions` on start (base URL ends with `/`, non-empty interval/range, valid user agent: `ParseAdd` throws `FormatException` on a bad one).
@@ -149,14 +151,21 @@ Tasks
    - Consider sanity filters in the parser for garbage bars (`low > high`, non-positive prices, negative volume, duplicate timestamps); decide behavior and test it.
 
 Milestones
-- [ ] `dotnet run` serves the API; `curl http://localhost:<port>/api/stocks/TSLA/daily-summary` returns the exact JSON shape (camelCase, 4-dp numbers, integer volume) from live data.
-- [ ] `/api/stocks/!!!/daily-summary` → 400 ProblemDetails; unknown symbol (e.g. `ZZZZZZZZ`) → 404 ProblemDetails; simulated upstream failure → 502; no stack traces in any body.
-- [ ] Second request for the same symbol within TTL does not call upstream (test asserts provider call count).
-- [ ] CORS preflight from the Vite origin succeeds; disallowed origin is rejected.
-- [ ] Integration test suite green; `dotnet build` zero warnings.
-- [ ] `/health` returns 200; OpenAPI document served in Development.
+- [x] `dotnet run` serves the API (`http://localhost:5241` with `--no-launch-profile --urls`); `curl .../api/stocks/TSLA/daily-summary`, `BTC-USD` and `^GSPC` return the exact JSON shape from live Yahoo.
+- [x] `/api/stocks/!!!/daily-summary` → 400 ProblemDetails; `ZZZZZZZZ` → 404 ProblemDetails; simulated upstream failure → 502, stalled upstream → 504, rate limit → 429; no stack traces or upstream text in any body.
+- [x] Second request for the same symbol within the TTL does not call upstream (live: 1.3 s then 5 ms; tests assert upstream call counts, expiry via `FakeTimeProvider`, and the TTL setting through real DI).
+- [x] CORS preflight from the Vite origin succeeds; unlisted origin is refused; error responses (400/404/502/429) still carry the CORS header.
+- [x] Test suite green (178 tests); `dotnet build --no-incremental` zero warnings; `dotnet list package --vulnerable` clean.
+- [x] `/health` returns 200 without touching Yahoo; OpenAPI document served in Development only.
 
-**Progress Notes:** _(none yet)_
+**Progress Notes:**
+- Built per the approved plan, test-first (red verified, then green): `YahooOptions` + `YahooOptionsValidator` (fail-fast at startup), `UpstreamFailureKind` (502 vs 504), Polly pipeline (total timeout → retry → circuit breaker → per-attempt timeout; retries 5xx/408/network/timeouts, never 404/429; `RetryCount = 0` skips the strategy because Polly rejects zero), `CachingMarketDataProvider`, `AddStockSummary` DI extension, `GlobalExceptionHandler` + `Problems` (stable `urn:daily-stock-summary:problem:*` types), `StocksEndpoints`, CORS, per-client rate limiting (IPv4-mapped IPv6 normalized), `/health`, OpenAPI (Development only), structured logging (parser and client warnings, handler logs by severity; JSON console outside Development).
+- Test approach: `WebApplicationFactory<Program>` with only Yahoo's `HttpMessageHandler` replaced (`TestSupport/ApiTestApp`), so every API test runs the real stack: routing, validation, rate limiter, CORS, cache, resilience, client, parser, calculator. Added a second real fixture (`btc-usd-15m-one-month.json`, 24-hour UTC market: a 1-bar first day and a 97-bar last day) with independently computed expectations.
+- Review pass (code-reviewer, silent-failure-hunter, pr-test-analyzer) findings, fixed test-first: cache replaced `MemoryCache` with a small `TimeProvider`-based store (silent refusal at the size limit, two clocks, single-flight lost when the TTL passed mid-fetch, empty glitch responses cached for a minute); two cache tests that could not fail for their stated reason were rewritten (token-observing upstream, truly concurrent callers with a start delay); IPv4-mapped clients got a second rate-limit allowance; no log trail for non-Yahoo 404s/429s or empty responses; `Yahoo:Interval`/`Range` values like `banana` passed startup; null `BaseUrl` crashed the validator. Reviewers suspected CORS headers were lost on error responses; a test proved they are not (verified for 400/404/502/429).
+- Mutation checks: 20 new mutations (cache lock, token forwarding, empty/failed caching, eviction order, TTL binding, CORS, rate-limit keys, handler log levels, validator, resilience wiring) plus the earlier set were all caught. One equivalent mutant remains: removing `ValidateOnStart` for the CORS settings still fails at startup because the CORS middleware resolves the options while the pipeline is built.
+- Decisions: no response compression; OpenAPI document only; `traceId` in problem bodies comes from ASP.NET's defaults (Activity id or `TraceIdentifier`); an empty-but-valid response yields `200 []` but is never cached; a response with absurd timestamps or `gmtoffset` is allowed to surface as a 500 (the real world does not send them; no test or code for it by design).
+- Known and accepted (not done): the shared fetch keeps running if every waiting caller disconnects (bounded by `TotalTimeout` and the rate limiter); cache expiry counts from fetch start; `OperationCanceledException` not from the caller's token is reported as a timeout; `HEAD` is not routed (405).
+- Carried to Phase 5: forwarded-headers handling when deployed behind a reverse proxy (rate limiting keys on the client address, which would otherwise be the proxy's), tzdata in the container image, an `Origin`-less/same-origin CORS setup if the frontend is served behind the same host.
 
 ---
 
@@ -217,7 +226,7 @@ Tasks
 1. Full bug sweep from manual end-to-end testing; run `pr-review-toolkit` review passes and `/code-review`; fix findings.
 2. Test hardening: backend coverage review (edge cases: holidays/weekends, symbols with `.`/`^`/`=`, thin-volume days, Yahoo schema drift); frontend tests for critical paths; an end-to-end smoke (Playwright, optional) for add symbol → toggle view → drag.
 3. Security pass: no secrets in repo or logs, dependency audit (`dotnet list package --vulnerable`, `npm audit`), input validation review, security headers, CORS locked to configured origins.
-4. Deployment: multi-stage Dockerfiles (ensure the runtime image has tzdata/ICU so IANA exchange timezones resolve; otherwise bucketing silently falls back to a fixed offset, so add a startup check; API: `dotnet publish` on the ASP.NET 10 runtime image, non-root; frontend: static build served by nginx), `docker-compose.yml` running both, config via environment variables, CI workflow (GitHub Actions: backend build+test, frontend lint+build+test).
+4. Deployment (behind a reverse proxy, add `UseForwardedHeaders` with known proxies before the rate limiter so limits apply per real client): multi-stage Dockerfiles (ensure the runtime image has tzdata/ICU so IANA exchange timezones resolve; otherwise bucketing silently falls back to a fixed offset, so add a startup check; API: `dotnet publish` on the ASP.NET 10 runtime image, non-root; frontend: static build served by nginx), `docker-compose.yml` running both, config via environment variables, CI workflow (GitHub Actions: backend build+test, frontend lint+build+test).
 5. Deliverables: `README.md` (prereqs, run backend, run frontend, run tests, Docker, API reference, design decisions, future work); finalize `PROMPT_LOG.md`; document manual (non-AI) changes and reasoning (user-authored section).
 6. `.gitignore` finalized (`.env.local`, `bin/`, `obj/`, `node_modules/`, `dist/`, IDE files).
 
@@ -236,4 +245,5 @@ Milestones
 
 - 2026-10-04 — Spec created. No code written yet. Open prerequisite: install .NET 10 SDK.
 - 2026-10-04 — Ascending day order decided by user (table shows newest first on the frontend).
-- 2026-10-04 — Phase 1 complete (83 tests, zero warnings, live smoke check passed). Symbol regex tightened; Phase 2 gained carried-over review items; Phase 5 gained a tzdata check.
+- 2026-10-04 — Phase 1 complete (64 tests, zero warnings, live smoke check passed). Symbol regex tightened; Phase 2 gained carried-over review items; Phase 5 gained a tzdata check.
+- 2026-10-04 — Phase 2 complete (178 tests, zero warnings, live check passed). Compression and OpenAPI viewer dropped by decision; cache rewritten without MemoryCache after review; Phase 5 gained forwarded-headers handling.
