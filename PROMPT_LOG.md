@@ -71,3 +71,7 @@ Adjustments: After the previous prompt, Claude suggested a bunch of fixes. As se
 Prompt: "My docker engine is taking forever to start up. Can you verify that everything works on your end?"
 Reasoning: While I waited for my Docker engine to start up, I had Claude verify that things were working. Once I was able to boot it up, I tested the latest frontend changes by entering a few example stock symbols. This is where I did my main testing of the frontend, and since Claude had created over a hundred tests to verify things like edge cases and exceptions, I was not surprised when everything worked according to plan. Entering '!!!' for the stock symbol gives you a simple Toast notification in the bottom right, for example, while adding a valid symbol like TSLA almost instantaneously pulls up the chart/table view and puts it in the viewing grid.
 Adjustments: Just had to restart computer to verify everything worked on the frontend.
+
+Prompt: "Found an issue while testing: if you add multiple views to the grid and then reload the page, it starts shaking them all over the place (see image kind of), like vibrating really fast and then to stop it you have to manage to click on one of their drag bars."
+Reasoning: Currently there is an issue on the grid view for all your currently added stock symbols: if you have three or more, and then you reload the page, the stock symbols will start going all over the page until you drag one of the symbol's top drag bars. Without the time constraint, this would definitely be a future fix.
+Adjustments: None
