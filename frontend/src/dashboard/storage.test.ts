@@ -198,3 +198,42 @@ describe('saving', () => {
     expect(saveDashboard(emptyDashboard, throwingStorage)).toBe(false)
   })
 })
+
+describe('dashboards saved before the wide-screen layout existed', () => {
+  it('load unchanged and gain a three-per-row layout for wide screens', () => {
+    const state = parseDashboard({
+      version: 1,
+      panels: [
+        { symbol: 'TSLA', view: 'table' },
+        { symbol: 'AAPL', view: 'chart' },
+      ],
+      layouts: {
+        lg: [
+          { i: 'AAPL', x: 0, y: 0, w: 12, h: 20 },
+          { i: 'TSLA', x: 0, y: 20, w: 6, h: 13 },
+        ],
+        md: [
+          { i: 'TSLA', x: 0, y: 0, w: 4, h: 13 },
+          { i: 'AAPL', x: 4, y: 0, w: 4, h: 13 },
+        ],
+        sm: [
+          { i: 'TSLA', x: 0, y: 0, w: 1, h: 13 },
+          { i: 'AAPL', x: 0, y: 13, w: 1, h: 13 },
+        ],
+      },
+    })
+
+    expect(state.panels).toEqual([
+      { symbol: 'TSLA', view: 'table' },
+      { symbol: 'AAPL', view: 'chart' },
+    ])
+    expect(state.layouts.lg).toEqual([
+      { i: 'AAPL', x: 0, y: 0, w: 12, h: 20 },
+      { i: 'TSLA', x: 0, y: 20, w: 6, h: 13 },
+    ])
+    expect(state.layouts.xl).toEqual([
+      { i: 'TSLA', x: 0, y: 0, w: 4, h: 12 },
+      { i: 'AAPL', x: 4, y: 0, w: 4, h: 12 },
+    ])
+  })
+})

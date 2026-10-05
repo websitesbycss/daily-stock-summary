@@ -1,33 +1,69 @@
+/*
+ * Design tokens. Light is the base palette; dark is defined twice (system preference and the explicit toggle) so the
+ * toggle always wins in both directions. Surfaces are layered (page, panel, panel bar) instead of boxed with heavy
+ * outlines; the accent is the chart's "high" blue and the warning is the chart's "low" amber.
+ */
 :root {
   color-scheme: light;
-  --paper: #f7f8fa;
-  --ink: #16202e;
-  --muted: #5b6677;
-  --rule: #dde2ea;
-  --high: #1d5fa8;
-  --low: #b85f0b;
-  --bars: #d3d9e3;
-  --hover: #eceff4;
-  --focus: #1d5fa8;
+  --bg: #f1f4f8;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --border: #dce2ea;
+  --control-border: #7b8799;
+  --ink: #0f1722;
+  --muted: #556274;
+  --placeholder: #7a8696;
+  --accent: #1d5fa8;
+  --on-accent: #ffffff;
+  --warn: #b85f0b;
+  --bars: #cbd3df;
+
+  /* Names used by the chart and older rules. */
+  --rule: var(--border);
+  --high: var(--accent);
+  --low: var(--warn);
+  --hover: var(--surface-2);
+  --paper: var(--surface);
+  --focus: var(--accent);
 
   --font-display: 'Newsreader Variable', Georgia, 'Times New Roman', serif;
   --font-ui: 'Hanken Grotesk Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --radius: 6px;
+  --bar-height: 3.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --paper: #11161d;
-    --ink: #e7ebf1;
-    --muted: #9aa5b5;
-    --rule: #2a323e;
-    --high: #6ea8e8;
-    --low: #e8a05a;
+    --bg: #0e131a;
+    --surface: #161d27;
+    --surface-2: #1b2430;
+    --border: #263140;
+    --control-border: #5b6a80;
+    --ink: #e8edf4;
+    --muted: #9ba7b8;
+    --placeholder: #6b778a;
+    --accent: #6ea8e8;
+    --on-accent: #0e131a;
+    --warn: #e8a05a;
     --bars: #2b3544;
-    --hover: #1a212b;
-    --focus: #6ea8e8;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e131a;
+  --surface: #161d27;
+  --surface-2: #1b2430;
+  --border: #263140;
+  --control-border: #5b6a80;
+  --ink: #e8edf4;
+  --muted: #9ba7b8;
+  --placeholder: #6b778a;
+  --accent: #6ea8e8;
+  --on-accent: #0e131a;
+  --warn: #e8a05a;
+  --bars: #2b3544;
 }
 
 *,
@@ -38,7 +74,7 @@
 
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 1rem;
@@ -67,40 +103,135 @@ input {
   text-align: right;
 }
 
-.page {
-  width: min(100%, 76rem);
-  margin-inline: auto;
-  padding-inline: clamp(1rem, 4vw, 2rem);
-  padding-block: clamp(1.5rem, 5vw, 3.5rem) 4rem;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-/* Intro and symbol field */
-
-.wordmark {
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: clamp(2rem, 7vw, 4.5rem);
+/* Toasts follow the app's theme (and the toggle), not just the system preference. */
+html [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--surface);
+  --normal-text: var(--ink);
+  --normal-border: var(--border);
+  --success-bg: var(--surface);
+  --success-text: var(--ink);
+  --success-border: var(--border);
+  --error-bg: var(--surface);
+  --error-text: var(--ink);
+  --error-border: var(--warn);
+  --info-bg: var(--surface);
+  --info-text: var(--ink);
+  --info-border: var(--accent);
 }
 
-.intro__title {
+/* ---------------------------------------------------------------------------------------------
+ * Header. One heading and one form serve both modes:
+ *   hero    (no symbols yet): a centred reading column with the large heading and field
+ *   compact (dashboard):      a slim sticky bar, so the panels get the screen
+ * ------------------------------------------------------------------------------------------- */
+
+.topbar {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+
+.topbar__inner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.topbar__title {
   font-family: var(--font-display);
-  font-size: clamp(2.5rem, 7vw, 4.25rem);
   font-weight: 500;
-  line-height: 1.05;
   letter-spacing: -0.02em;
+  transition: font-size 260ms ease;
 }
 
-.intro__lede {
-  margin-top: 0.75rem;
+.topbar__lede {
   max-width: 34rem;
   color: var(--muted);
 }
 
-.symbol-form {
-  margin-top: 2rem;
+.topbar__examples {
+  font-size: 0.9375rem;
+  color: var(--muted);
 }
+
+.app--hero .topbar__inner {
+  display: block;
+  width: min(100%, 64rem);
+  margin-inline: auto;
+  padding: clamp(2rem, 9vh, 5.5rem) clamp(1rem, 4vw, 2rem) 0;
+}
+
+.app--hero .topbar__title {
+  font-size: clamp(2.5rem, 7vw, 4.25rem);
+  line-height: 1.05;
+}
+
+.app--hero .topbar__lede {
+  margin-top: 0.75rem;
+}
+
+.app--hero .topbar__examples {
+  margin-top: 1rem;
+}
+
+.app--hero .theme-toggle {
+  position: absolute;
+  top: clamp(1rem, 3vh, 1.5rem);
+  right: clamp(1rem, 4vw, 2rem);
+}
+
+.app--compact .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.app--compact .topbar__inner {
+  min-height: var(--bar-height);
+  gap: 0.5rem 1.25rem;
+  padding: 0.5rem clamp(0.5rem, 1.2vw, 1rem);
+}
+
+.app--compact .topbar__title {
+  flex: none;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.app--compact .theme-toggle {
+  margin-left: auto;
+}
+
+@media (max-width: 40rem) {
+  .app--compact .topbar__title {
+    font-size: 1.125rem;
+  }
+
+  .app--compact .symbol-form {
+    order: 3;
+    flex: 1 0 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Symbol field
+ * ------------------------------------------------------------------------------------------- */
 
 .symbol-form__label {
   display: block;
@@ -131,35 +262,82 @@ input {
 }
 
 .symbol-form__input::placeholder {
-  color: var(--rule);
+  color: var(--placeholder);
   opacity: 1;
 }
 
 .symbol-form__input:focus-visible {
   outline: none;
-  border-bottom-color: var(--focus);
-  box-shadow: 0 2px 0 0 var(--focus);
+  border-bottom-color: var(--accent);
+  box-shadow: 0 2px 0 0 var(--accent);
 }
 
 .symbol-form__input[aria-invalid='true'] {
-  border-bottom-color: var(--low);
+  border-bottom-color: var(--warn);
+  box-shadow: 0 2px 0 0 var(--warn);
 }
 
-.symbol-form__input:disabled {
-  opacity: 0.6;
+.app--hero .symbol-form {
+  margin-top: 2rem;
 }
 
-.intro__examples {
-  margin-top: 1rem;
+.app--compact .symbol-form {
+  flex: 0 1 28rem;
+  min-width: 0;
+}
+
+.app--compact .symbol-form__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.app--compact .symbol-form__row {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app--compact .symbol-form__input {
+  flex: 1 1 auto;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-family: var(--font-ui);
   font-size: 0.9375rem;
-  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
-/* Buttons */
+.app--compact .symbol-form__input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.app--compact .symbol-form__input[aria-invalid='true'] {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn);
+}
+
+.app--compact .symbol-form .button {
+  min-height: 2.25rem;
+  padding-block: 0.25rem;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Buttons
+ * ------------------------------------------------------------------------------------------- */
 
 .button {
   padding: 0.5rem 1rem;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius);
   background: transparent;
   cursor: pointer;
@@ -168,17 +346,18 @@ input {
 }
 
 .button:hover:not(:disabled) {
-  background: var(--hover);
+  background: var(--surface-2);
 }
 
 .button--primary {
-  background: var(--ink);
-  color: var(--paper);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .button--primary:hover:not(:disabled) {
-  background: var(--ink);
-  opacity: 0.88;
+  background: var(--accent);
+  filter: brightness(1.08);
 }
 
 .button:disabled {
@@ -190,7 +369,7 @@ input {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--high);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 0.2em;
   cursor: pointer;
@@ -201,100 +380,9 @@ input {
   cursor: not-allowed;
 }
 
-/* Dashboard and panels */
-
-.empty {
-  margin-top: 2.5rem;
-  color: var(--muted);
-}
-
-.dashboard {
-  margin-top: clamp(2rem, 6vw, 3rem);
-}
-
-.dashboard__item {
-  min-width: 0;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--paper);
-  overflow: hidden;
-}
-
-.panel:focus-visible {
-  outline-offset: 0;
-}
-
-.panel[data-flash] {
-  animation: flash 1.2s ease-out;
-}
-
-@keyframes flash {
-  from {
-    border-color: var(--focus);
-    box-shadow: 0 0 0 3px var(--focus);
-  }
-  to {
-    border-color: var(--rule);
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
-
-.panel__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--hover);
-  cursor: grab;
-  user-select: none;
-}
-
-.react-draggable-dragging .panel__bar {
-  cursor: grabbing;
-}
-
-.panel__grip {
-  display: inline-flex;
-  color: var(--muted);
-}
-
-.panel__heading {
-  flex: 1 1 8rem;
-  min-width: 0;
-}
-
-.panel__title {
-  font-family: var(--font-display);
-  font-size: 1.375rem;
-  font-weight: 600;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-
-.panel__range {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
-.panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-  cursor: default;
-}
-
 .segmented {
   display: inline-flex;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -309,37 +397,16 @@ input {
 }
 
 .segmented__option:hover:not([aria-pressed='true']) {
-  background: var(--paper);
+  background: var(--surface-2);
 }
 
 .segmented__option[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .segmented__option:focus-visible {
   outline-offset: -4px;
-}
-
-.panel__actions .segmented {
-  margin-right: 0.25rem;
-}
-
-.panel__actions .segmented__option {
-  padding: 0.25rem 0.75rem;
-  min-height: 2rem;
-  font-size: 0.875rem;
-}
-
-.panel__body {
-  flex: 1;
-  min-height: 0;
-  padding: 0.75rem;
-  overflow: auto;
-}
-
-.panel__body--chart {
-  overflow: hidden;
 }
 
 .icon-button {
@@ -356,8 +423,8 @@ input {
 }
 
 .icon-button:hover:not(:disabled):not([aria-disabled='true']) {
-  border-color: var(--rule);
-  background: var(--paper);
+  border-color: var(--border);
+  background: var(--surface);
 }
 
 .icon-button:disabled,
@@ -367,9 +434,204 @@ input {
   cursor: not-allowed;
 }
 
+.theme-toggle .segmented__option {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Page and dashboard (app shell: full width, tight gutters)
+ * ------------------------------------------------------------------------------------------- */
+
+.page {
+  padding-inline: clamp(0.5rem, 1.2vw, 1rem);
+  padding-block: 0.75rem 3rem;
+}
+
+.app--hero .page {
+  /* The empty state has its own side padding so it lines up with the heading above it. */
+  padding: 0 0 4rem;
+}
+
+.empty-state {
+  width: min(100%, 64rem);
+  margin: clamp(1.75rem, 5vh, 3rem) auto 0;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+}
+
+.empty {
+  color: var(--muted);
+}
+
+/* A faint preview of what a panel will look like. Decorative: hidden from assistive technology and not clickable. */
+.ghost {
+  margin-top: 1.25rem;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  opacity: 0.42;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ghost__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px dashed var(--control-border);
+}
+
+.ghost__blob {
+  display: block;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.ghost__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.ghost__grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.ghost__bars rect {
+  fill: var(--bars);
+}
+
+.ghost__line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.ghost__line--high {
+  stroke: var(--high);
+}
+
+.ghost__line--low {
+  stroke: var(--low);
+}
+
+.dashboard__item {
+  min-width: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.panel {
+  /* Scrolling a panel into view must not leave it under the sticky top bar. */
+  scroll-margin-top: calc(var(--bar-height) + 0.75rem);
+}
+
+.panel:focus-visible {
+  outline-offset: 0;
+}
+
+.panel[data-flash] {
+  animation: flash 1.2s ease-out;
+}
+
+@keyframes flash {
+  from {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  to {
+    border-color: var(--border);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.panel__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.625rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: grab;
+  user-select: none;
+}
+
+.react-draggable-dragging .panel__bar {
+  cursor: grabbing;
+}
+
+.panel__grip {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.panel__heading {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+
+.panel__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.panel__range {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem;
+  cursor: default;
+}
+
+.panel__actions .segmented {
+  margin-right: 0.25rem;
+}
+
+.panel__actions .segmented__option {
+  padding: 0.25rem 0.625rem;
+  min-height: 1.75rem;
+  font-size: 0.8125rem;
+}
+
+.panel__body {
+  flex: 1;
+  min-height: 0;
+  padding: 0.5rem 0.625rem 0.625rem;
+  overflow: auto;
+}
+
+.panel__body--chart {
+  overflow: hidden;
+}
+
 .react-grid-item.react-grid-placeholder {
-  background: var(--rule);
-  opacity: 0.6;
+  background: var(--accent);
+  opacity: 0.14;
   border-radius: var(--radius);
 }
 
@@ -384,22 +646,12 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .react-grid-layout,
   .react-grid-item,
-  .panel[data-flash] {
+  .panel[data-flash],
+  .topbar,
+  .topbar__title {
     transition: none !important;
     animation: none !important;
   }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
 }
 
 /* States */
@@ -421,7 +673,7 @@ input {
   height: 100%;
   min-height: 10rem;
   border-radius: var(--radius);
-  background: linear-gradient(90deg, var(--hover), var(--rule), var(--hover));
+  background: linear-gradient(90deg, var(--surface-2), var(--border), var(--surface-2));
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
@@ -447,13 +699,13 @@ input {
 .summary-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
 
 .summary-table th,
 .summary-table td {
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--rule);
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   white-space: nowrap;
 }
@@ -468,7 +720,7 @@ input {
 }
 
 .summary-table tbody tr:hover {
-  background: var(--hover);
+  background: var(--surface-2);
 }
 
 .sort-button {
@@ -498,9 +750,9 @@ input {
 .chart__legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 
@@ -530,9 +782,9 @@ input {
 
 .chart-tooltip {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--paper);
+  background: var(--surface);
   font-size: 0.875rem;
 }
 

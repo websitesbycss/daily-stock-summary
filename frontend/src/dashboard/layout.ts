@@ -1,18 +1,19 @@
 import type { Breakpoint, GridItem } from './types'
 
 /** Container widths (px) at which the grid switches layout. */
-export const BREAKPOINT_WIDTHS: Record<Breakpoint, number> = { lg: 900, md: 600, sm: 0 }
+export const BREAKPOINT_WIDTHS: Record<Breakpoint, number> = { xl: 1500, lg: 900, md: 600, sm: 0 }
 
-export const COLUMNS: Record<Breakpoint, number> = { lg: 12, md: 8, sm: 1 }
+export const COLUMNS: Record<Breakpoint, number> = { xl: 12, lg: 12, md: 8, sm: 1 }
 
-/** Two panels per row on wide screens, one on a phone. */
+/** Three panels per row on very wide screens, two on laptops and tablets, one on a phone. */
 export const DEFAULT_SIZE: Record<Breakpoint, { w: number; h: number }> = {
+  xl: { w: 4, h: 12 },
   lg: { w: 6, h: 13 },
   md: { w: 4, h: 13 },
   sm: { w: 1, h: 13 },
 }
 
-export const BREAKPOINTS: Breakpoint[] = ['lg', 'md', 'sm']
+export const BREAKPOINTS: Breakpoint[] = ['xl', 'lg', 'md', 'sm']
 
 /** Smallest a panel can be resized to: its top bar plus a readable chart. */
 export const MIN_SIZE = { w: 3, h: 9 }

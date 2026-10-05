@@ -450,6 +450,7 @@ describe('removing and reordering panels', () => {
 
 describe('what the dashboard gives the grid', () => {
   it.each([
+    [1600, 'xl'],
     [1000, 'lg'],
     [700, 'md'],
     [500, 'sm'],
@@ -610,5 +611,111 @@ describe('resizing', () => {
     renderApp()
 
     expect(slot(grid.props!.layouts.lg, 'TSLA')).toMatchObject({ w: 12, h: 20 })
+  })
+})
+
+describe('header modes', () => {
+  it('opens as a hero: one heading, the intro, the examples and a faint preview of a panel', () => {
+    stubApi()
+    const { container } = renderApp()
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Daily Stock Summary' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('Daily Stock Summary')).toHaveLength(1) // no separate wordmark above it
+    expect(screen.queryByText('Look up stocks')).not.toBeInTheDocument()
+    expect(screen.getByText(/Daily low and high averages/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'TSLA' })).toBeInTheDocument()
+
+    const ghost = container.querySelector('.ghost')
+    expect(ghost).toHaveAttribute('aria-hidden', 'true')
+    expect(ghost?.querySelector('button, a, input, [tabindex]')).toBeNull()
+  })
+
+  it('collapses to a slim bar once a symbol is added, keeping the heading and the field', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await addSymbol(user, 'TSLA')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Daily Stock Summary' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Daily low and high averages/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'AAPL' })).not.toBeInTheDocument() // the example links
+    expect(screen.queryByText(/No symbols yet/)).not.toBeInTheDocument()
+    expect(container.querySelector('.ghost')).toBeNull()
+
+    // The same field keeps working from the bar.
+    await addSymbol(user, 'aapl')
+    expect(panelNames()).toEqual(['TSLA', 'AAPL'])
+  })
+
+  it('returns to the hero when the last symbol is removed', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+    await addSymbol(user, 'TSLA')
+
+    await user.click(within(panel('TSLA')).getByRole('button', { name: 'Remove TSLA' }))
+
+    expect(screen.getByText(/Daily low and high averages/)).toBeInTheDocument()
+    expect(container.querySelector('.ghost')).not.toBeNull()
+  })
+})
+
+describe('theme', () => {
+  const choice = (name: string) => screen.getByRole('button', { name })
+
+  it('follows the system until a choice is made', () => {
+    stubApi()
+    renderApp()
+
+    expect(choice('Match system theme')).toHaveAttribute('aria-pressed', 'true')
+    expect(document.documentElement).not.toHaveAttribute('data-theme')
+  })
+
+  it('applies and remembers an explicit choice', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    const first = renderApp()
+
+    await user.click(choice('Dark theme'))
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(choice('Dark theme')).toHaveAttribute('aria-pressed', 'true')
+    expect(choice('Light theme')).toHaveAttribute('aria-pressed', 'false')
+    expect(window.localStorage.getItem('dss.theme')).toBe('dark')
+
+    first.unmount()
+    document.documentElement.removeAttribute('data-theme')
+    renderApp()
+
+    expect(choice('Dark theme')).toHaveAttribute('aria-pressed', 'true')
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+  })
+
+  it('goes back to following the system', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(choice('Light theme'))
+
+    await user.click(choice('Match system theme'))
+
+    expect(document.documentElement).not.toHaveAttribute('data-theme')
+    expect(window.localStorage.getItem('dss.theme')).toBe('system')
+  })
+
+  it('is available from the slim bar as well', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderApp()
+    await addSymbol(user, 'TSLA')
+
+    await user.click(choice('Light theme'))
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
   })
 })

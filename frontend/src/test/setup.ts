@@ -5,4 +5,7 @@ import { afterEach } from 'vitest'
 // jsdom has no layout, so it does not implement scrolling.
 Element.prototype.scrollIntoView = () => {}
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  document.documentElement.removeAttribute('data-theme')
+})

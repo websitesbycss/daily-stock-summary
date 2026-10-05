@@ -36,7 +36,7 @@ function withLimits(layouts: Layouts): Layouts {
 }
 
 const ROW_HEIGHT = 30
-const MARGIN = [16, 16] as const
+const MARGIN = [10, 10] as const
 
 export function Dashboard({ state, dispatch, onRemoved, announce }: Props) {
   const { width, containerRef, mounted } = useContainerWidth()

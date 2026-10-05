@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { dashboardReducer, emptyDashboard, type DashboardAction } from './dashboardReducer'
 import { readingOrder } from './layout'
-import type { DashboardState } from './types'
+import type { Breakpoint, DashboardState } from './types'
 
 function run(...actions: DashboardAction[]): DashboardState {
   return actions.reduce(dashboardReducer, emptyDashboard)
 }
 
 const add = (symbol: string): DashboardAction => ({ type: 'add', symbol })
-const at = (state: DashboardState, breakpoint: 'lg' | 'md' | 'sm', symbol: string) =>
+const at = (state: DashboardState, breakpoint: Breakpoint, symbol: string) =>
   state.layouts[breakpoint]!.find((item) => item.i === symbol)
 
 describe('adding panels', () => {
@@ -35,6 +35,22 @@ describe('adding panels', () => {
   it('puts a new panel into the gap a removed panel left', () => {
     const state = run(add('A'), add('B'), add('C'), { type: 'remove', symbol: 'B' }, add('D'))
     expect(at(state, 'lg', 'D')).toMatchObject({ x: 6, y: 0 })
+  })
+})
+
+describe('very wide screens', () => {
+  it('lays out three panels per row, then starts a new row', () => {
+    const state = run(add('TSLA'), add('AAPL'), add('MSFT'), add('NVDA'))
+
+    expect(at(state, 'xl', 'TSLA')).toEqual({ i: 'TSLA', x: 0, y: 0, w: 4, h: 12 })
+    expect(at(state, 'xl', 'AAPL')).toEqual({ i: 'AAPL', x: 4, y: 0, w: 4, h: 12 })
+    expect(at(state, 'xl', 'MSFT')).toEqual({ i: 'MSFT', x: 8, y: 0, w: 4, h: 12 })
+    expect(at(state, 'xl', 'NVDA')).toEqual({ i: 'NVDA', x: 0, y: 12, w: 4, h: 12 })
+  })
+
+  it('keeps laptops at two per row', () => {
+    const state = run(add('TSLA'), add('AAPL'), add('MSFT'))
+    expect(at(state, 'lg', 'MSFT')).toEqual({ i: 'MSFT', x: 0, y: 13, w: 6, h: 13 })
   })
 })
 

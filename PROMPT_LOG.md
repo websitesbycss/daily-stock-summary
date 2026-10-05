@@ -54,3 +54,20 @@ Adjustments: None
 Prompt: "Go for phase 5"
 Reasoning: I tested phase 4's result by running the backend in one powershell terminal via dotnet run, and then the frontend in another terminal via npm run dev. The frontend was then accessible on localhost, where I was able to successfully test the daily stock summary capabilities, including both chart and table views, multiple stock symbols viewable, and fluid, adjustable layouts. Phase 5 is the last round, consisting of general improvements and cleanup where needed.
 Adjustments: None
+
+Prompt: "Attached is a screenshot of the current dashboard if you have no stock symbols added. Using the frontend-design skill, critique the dashboard for 5 improvements we can make (in any area) and list them out to me."
+Reasoning: All five phases were now complete, so it was time to move on to human testing (me) and improvements. Using multimodal inference for Claude Code was a really cool opportunity because it allowed me to just take a screenshot and give the model that context instead of describing what was going on myself.
+Adjustments: None
+
+Prompt: "For #1: I agree with raising the placeholder contrast, but the other fixes you suggested are either implemented or do not need to be changed.
+For #2: The only fix I want you to implement is to show a ghosted sample panel. Do not make it too prominent, though; it should just provide a rough idea of what the user is going to get once they add a stock symbol.
+For #3: I completely agree with your fix suggestions. And, I think this is an opening for us to consider a refactoring of the dashboard: when you add a symbol, it will then collapse the header into a slim top bar and also reduce the left/right padding/margin so everything becomes a sort of web app UI - think of Coinbase, Robinhood, etc. where it sort of looks like there is a lot going on but with our UX the user can handle it easily.
+For #4: Instead of your suggested fixes, let us remove the daily stock summary text at the very top, but then change the Look up stocks text to Daily Stock Summary.
+For #5: I agree with all your changes. I want the light mode to be very good as well.
+Go ahead and implement these"
+Reasoning: The frontend dashboard looked very empty and basic, so I wanted some things to change. This is where my main 'refactoring of the dashboard' suggestion came from. I also thought that users would want the option to switch between light and dark mode, not being forced to use dark mode because the app was set on that by default.
+Adjustments: After the previous prompt, Claude suggested a bunch of fixes. As seen in the prompt above, I cherry-picked which ones I wanted Claude to implement and discarded the others.
+
+Prompt: "My docker engine is taking forever to start up. Can you verify that everything works on your end?"
+Reasoning: While I waited for my Docker engine to start up, I had Claude verify that things were working. Once I was able to boot it up, I tested the latest frontend changes by entering a few example stock symbols. This is where I did my main testing of the frontend, and since Claude had created over a hundred tests to verify things like edge cases and exceptions, I was not surprised when everything worked according to plan. Entering '!!!' for the stock symbol gives you a simple Toast notification in the bottom right, for example, while adding a valid symbol like TSLA almost instantaneously pulls up the chart/table view and puts it in the viewing grid.
+Adjustments: Just had to restart computer to verify everything worked on the frontend.

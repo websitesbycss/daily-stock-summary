@@ -64,6 +64,9 @@ describe('moveInReadingOrder', () => {
 
 describe('breakpointForWidth', () => {
   it.each([
+    [1920, 'xl'],
+    [1501, 'xl'],
+    [1500, 'lg'],
     [1200, 'lg'],
     [901, 'lg'],
     [900, 'md'],

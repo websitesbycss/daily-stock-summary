@@ -1,6 +1,6 @@
 export type View = 'chart' | 'table'
 
-export type Breakpoint = 'lg' | 'md' | 'sm'
+export type Breakpoint = 'xl' | 'lg' | 'md' | 'sm'
 
 /** One panel's position in the grid, in grid units. `i` is the panel's symbol. */
 export interface GridItem {

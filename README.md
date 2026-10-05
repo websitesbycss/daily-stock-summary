@@ -3,7 +3,7 @@
 A small full-stack app built for a take-home assessment. It reads the last month of 15-minute market data from Yahoo Finance's public chart API, groups it by trading day, and shows the result as a table and a chart for as many symbols as you like, on a dashboard whose panels you can drag, resize and reorder.
 
 - **Backend:** .NET 10 minimal API. One endpoint returns, per trading day, the average of the 15-minute lows, the average of the highs, and the total volume.
-- **Frontend:** React 19 + TypeScript. Add symbols, switch each panel between chart and table, rearrange panels by dragging their title bar. Errors appear as corner toasts.
+- **Frontend:** React 19 + TypeScript. Add symbols, switch each panel between chart and table, rearrange panels by dragging their title bar. With no symbols the page is a simple welcome screen; once you add one, the header collapses into a slim top bar and the dashboard fills the window (two panels per row on laptops, three on wide screens, one on a phone). Light, dark and match-system themes. Errors appear as corner toasts.
 - **No API key needed.** Yahoo's public chart endpoint is used as is.
 
 ```mermaid
@@ -46,7 +46,7 @@ cp .env.example .env.local   # points the app at http://localhost:5241
 npm run dev
 ```
 
-Open http://localhost:5173, type a symbol such as `TSLA`, `AAPL`, `^GSPC` or `BTC-USD`, and press Enter. Add a few more, then drag a panel by its title bar to rearrange the dashboard. Your symbols, views, positions and sizes are remembered in the browser.
+Open http://localhost:5173, type a symbol such as `TSLA`, `AAPL`, `^GSPC` or `BTC-USD`, and press Enter. Add a few more, then drag a panel by its title bar to rearrange the dashboard. Your symbols, views, positions, sizes and theme are remembered in the browser.
 
 ## Run the tests
 
@@ -149,7 +149,7 @@ Every failure is an [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `applicat
 - **Same-origin deployment.** nginx serves the app and proxies `/api/`, so there is no CORS to configure in production. Locally the API allows the Vite dev origin.
 - **Frontend state.** One TanStack Query per symbol (so one failing symbol never affects another), a pure reducer for the dashboard layout, and `localStorage` persistence that tolerates corrupt, outdated or blocked storage. Layout is saved only when you finish a drag or resize.
 - **Dates are never parsed with `new Date()` on the frontend.** The backend already returns the exchange's calendar day; parsing `"2026-01-30"` in JavaScript means UTC midnight, which shows the previous day in the United States. The frontend formats the year, month and day parts directly.
-- **Accessibility.** Panels can be reordered with buttons (no mouse needed), changes are announced to screen readers, focus is managed after removals, and the dark theme follows the system setting.
+- **Accessibility.** Panels can be reordered with buttons (no mouse needed), changes are announced to screen readers, focus is managed after removals, and the light and dark palettes are checked for WCAG contrast. The theme can follow the system or be chosen explicitly; a tiny external script applies the saved choice before the first paint so the page never flashes the wrong theme (it is a separate file because the Content-Security-Policy allows scripts only from the app's own origin).
 - **Security.** The API sends `nosniff`, `no-referrer` and a locked-down CSP on every response; nginx sends a CSP for the app (scripts only from the same origin), plus frame, referrer and permissions headers. Dependencies are audited in CI.
 
 ## Known limitations and future work
@@ -165,4 +165,4 @@ Every failure is an [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `applicat
 
 ## How this was built
 
-The project was built with Claude Code under a written spec (`IMPLEMENTATION_SPEC.md`, the source of truth for scope, decisions and progress) and ground rules (`CLAUDE.md`): backend work test-first, and every prompt logged. See [`PROMPT_LOG.md`](PROMPT_LOG.md) for the prompts, the reasoning behind them, and the adjustments made, and [`manual-changes.txt`](manual-changes.txt) for the changes made by hand outside the AI sessions.
+The project was built with Claude Code under a written spec (`IMPLEMENTATION_SPEC.md`, the source of truth for scope, decisions and progress) and ground rules (`CLAUDE.md`): backend work test-first, and every prompt logged. See [`PROMPT_LOG.md`](PROMPT_LOG.md) for the prompts, the reasoning behind them, and the adjustments made.
